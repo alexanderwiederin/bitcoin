@@ -1,0 +1,19 @@
+CompileFlags:
+  Add: 
+    - "-I."
+    - "-Isrc"
+    - "-Iinclude"
+    - "-std=c++17"
+  
+# Improve clangd performance
+Index:
+  Background: Build
+
+# Improve clangd diagnostics
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+
+# Tweak clangd behavior
+Hover:
+  ShowAKA: Yes

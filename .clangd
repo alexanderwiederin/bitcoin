@@ -1,0 +1,26 @@
+CompileFlags:
+  Add:
+    - "-I."
+    - "-Isrc"
+    - "-Ibuild/src"  # For generated files
+    - "-Iinclude"
+    - "-I${workspaceFolder}"
+    - "-std=c++20"
+    - "-DHAVE_CONFIG_H"
+    - "-D__STDC_FORMAT_MACROS"
+    - "-DBUILD_BITCOIN_INTERNAL"
+    - "-DBUILD_KERNEL_LIB=1"
+    - "-DBUILD_UTIL_CHAINSTATE=1"
+    - "-Isrc/secp256k1/include"
+    - "-Isrc/univalue/include"
+    - "-Isrc/leveldb/include"
+    - "-Isrc/crypto"
+    - "-DBOOST_SP_USE_STD_ATOMIC=1"
+
+# Configure clangd for better C++ processing
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+# Force clangd to use compile_commands.json
+CompilationDatabase: build
