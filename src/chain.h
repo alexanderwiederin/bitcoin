@@ -47,6 +47,68 @@ static constexpr int32_t SEQ_ID_INIT_FROM_DISK = 1;
  */
 static constexpr int64_t MAX_BLOCK_TIME_GAP = 90 * 60;
 
+class CBlockFileInfo
+{
+public:
+    unsigned int nBlocks{};      //!< number of blocks stored in file
+    unsigned int nSize{};        //!< number of used bytes of block file
+    unsigned int nUndoSize{};    //!< number of used bytes in the undo file
+    unsigned int nHeightFirst{}; //!< lowest height of block in file
+    unsigned int nHeightLast{};  //!< highest height of block in file
+    uint64_t nTimeFirst{};       //!< earliest time of block in file
+    uint64_t nTimeLast{};        //!< latest time of block in file
+
+    SERIALIZE_METHODS(CBlockFileInfo, obj)
+    {
+        READWRITE(VARINT(obj.nBlocks));
+        READWRITE(VARINT(obj.nSize));
+        READWRITE(VARINT(obj.nUndoSize));
+        READWRITE(VARINT(obj.nHeightFirst));
+        READWRITE(VARINT(obj.nHeightLast));
+        READWRITE(VARINT(obj.nTimeFirst));
+        READWRITE(VARINT(obj.nTimeLast));
+    }
+
+    CBlockFileInfo() = default;
+
+    std::string ToString() const;
+
+    /** update statistics (does not update nSize) */
+    void AddBlock(unsigned int nHeightIn, uint64_t nTimeIn)
+    {
+        if (nBlocks == 0 || nHeightFirst > nHeightIn)
+            nHeightFirst = nHeightIn;
+        if (nBlocks == 0 || nTimeFirst > nTimeIn)
+            nTimeFirst = nTimeIn;
+        nBlocks++;
+        if (nHeightIn > nHeightLast)
+            nHeightLast = nHeightIn;
+        if (nTimeIn > nTimeLast)
+            nTimeLast = nTimeIn;
+    }
+};
+
+
+struct BlockFileInfoWrapper : CBlockFileInfo
+{
+    BlockFileInfoWrapper() = default;
+
+    explicit BlockFileInfoWrapper(const CBlockFileInfo* info) : CBlockFileInfo(*info)
+    {
+    }
+
+    SERIALIZE_METHODS(BlockFileInfoWrapper, obj)
+    {
+        READWRITE(obj.nBlocks);
+        READWRITE(obj.nSize);
+        READWRITE(obj.nUndoSize);
+        READWRITE(obj.nHeightFirst);
+        READWRITE(obj.nHeightLast);
+        READWRITE(obj.nTimeFirst);
+        READWRITE(obj.nTimeLast);
+    }
+};
+
 enum BlockStatus : uint32_t {
     //! Unused.
     BLOCK_VALID_UNKNOWN      =    0,
@@ -122,6 +184,9 @@ public:
 
     //! Byte offset within rev?????.dat where this block's undo data is stored
     unsigned int nUndoPos GUARDED_BY(::cs_main){0};
+
+    //! Byte offset within headers.dat where this block's header data is stored
+    int64_t header_pos GUARDED_BY(::cs_main){0};
 
     //! (memory only) Total amount of work (expected number of hashes) in the chain up to and including this block
     arith_uint256 nChainWork{};
@@ -374,6 +439,23 @@ public:
 
     uint256 GetBlockHash() = delete;
     std::string ToString() = delete;
+};
+
+struct DiskBlockIndexWrapper : CDiskBlockIndex {
+public:
+    DiskBlockIndexWrapper() = default;
+
+    explicit DiskBlockIndexWrapper(const CDiskBlockIndex* pindex) : CDiskBlockIndex(*pindex)
+    {
+    }
+
+    SERIALIZE_METHODS(DiskBlockIndexWrapper, obj)
+    {
+        LOCK(::cs_main);
+        READWRITE(obj.nHeight, obj.nStatus, obj.nTx, obj.nFile, obj.nDataPos, obj.nUndoPos, obj.header_pos);
+        // block header
+        READWRITE(obj.nVersion, obj.hashPrev, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce);
+    }
 };
 
 /** An in-memory indexed chain of blocks. */
