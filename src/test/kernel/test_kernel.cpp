@@ -474,7 +474,6 @@ BOOST_AUTO_TEST_CASE(btck_chainman_tests)
 std::unique_ptr<ChainMan> create_chainman(TestDirectory& test_directory,
                                           bool reindex,
                                           bool wipe_chainstate,
-                                          bool block_tree_db_in_memory,
                                           bool chainstate_db_in_memory,
                                           Context& context)
 {
@@ -487,9 +486,6 @@ std::unique_ptr<ChainMan> create_chainman(TestDirectory& test_directory,
     }
     if (wipe_chainstate) {
         chainman_opts.SetWipeDbs(/*wipe_block_tree=*/false, /*wipe_chainstate=*/wipe_chainstate);
-    }
-    if (block_tree_db_in_memory) {
-        chainman_opts.SetBlockTreeDbInMemory(block_tree_db_in_memory);
     }
     if (chainstate_db_in_memory) {
         chainman_opts.SetChainstateDbInMemory(chainstate_db_in_memory);
@@ -514,7 +510,7 @@ void chainman_reindex_test(TestDirectory& test_directory)
 
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto context{create_context(notifications, ChainType::MAINNET)};
-    auto chainman{create_chainman(test_directory, true, false, false, false, context)};
+    auto chainman{create_chainman(test_directory, true, false, false, context)};
 
     std::vector<std::string> import_files;
     BOOST_CHECK(chainman->ImportBlocks(import_files));
@@ -554,7 +550,7 @@ void chainman_reindex_chainstate_test(TestDirectory& test_directory)
 {
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto context{create_context(notifications, ChainType::MAINNET)};
-    auto chainman{create_chainman(test_directory, false, true, false, false, context)};
+    auto chainman{create_chainman(test_directory, false, true, false, context)};
 
     std::vector<std::string> import_files;
     import_files.push_back((test_directory.m_directory / "blocks" / "blk00000.dat").string());
@@ -566,7 +562,7 @@ void chainman_mainnet_validation_test(TestDirectory& test_directory)
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto validation_interface{std::make_shared<TestValidationInterface>()};
     auto context{create_context(notifications, ChainType::MAINNET, validation_interface)};
-    auto chainman{create_chainman(test_directory, false, false, false, false, context)};
+    auto chainman{create_chainman(test_directory, false, false, false, context)};
 
     {
         // Process an invalid block
@@ -639,7 +635,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
 
     auto notifications{std::make_shared<TestKernelNotifications>()};
     auto context{create_context(notifications, ChainType::REGTEST)};
-    auto chainman{create_chainman(in_memory_test_directory, false, false, true, true, context)};
+    auto chainman{create_chainman(in_memory_test_directory, false, false, true, context)};
 
     for (auto& raw_block : REGTEST_BLOCK_DATA) {
         Block block{as_bytes(raw_block)};
@@ -665,7 +661,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     const size_t mid{REGTEST_BLOCK_DATA.size() / 2};
 
     {
-        auto chainman{create_chainman(test_directory, false, false, false, false, context)};
+        auto chainman{create_chainman(test_directory, false, false, false, context)};
         for (size_t i{0}; i < mid; i++) {
             Block block{as_bytes(REGTEST_BLOCK_DATA[i])};
             bool new_block{false};
@@ -674,7 +670,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
         }
     }
 
-    auto chainman{create_chainman(test_directory, false, false, false, false, context)};
+    auto chainman{create_chainman(test_directory, false, false, false, context)};
 
     for (size_t i{mid}; i < REGTEST_BLOCK_DATA.size(); i++) {
         Block block{as_bytes(REGTEST_BLOCK_DATA[i])};
