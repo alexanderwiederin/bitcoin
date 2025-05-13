@@ -413,6 +413,11 @@ public:
         kernel_chainstate_manager_options_set_chainstate_db_in_memory(m_options.get(), chainstate_db_in_memory);
     }
 
+    void SetSkipUtxoDatabase(bool skip_utxo_database) const noexcept
+    {
+        kernel_chainstate_manager_options_set_skip_utxo_database(m_options.get(), skip_utxo_database);
+    }
+
     /** Check whether this ChainstateManagerOptions object is valid. */
     explicit operator bool() const noexcept { return bool{m_options}; }
 

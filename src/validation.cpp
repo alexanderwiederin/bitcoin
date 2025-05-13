@@ -98,6 +98,16 @@ static constexpr auto DATABASE_WRITE_INTERVAL_MIN{50min};
 static constexpr auto DATABASE_WRITE_INTERVAL_MAX{70min};
 /** Maximum age of our tip for us to be considered current for fee estimation */
 static constexpr std::chrono::hours MAX_FEE_ESTIMATION_TIP_AGE{3};
+
+// Create a dummy coins view class for when UTXO database is skipped
+class DummyCoinsView : public CCoinsView {
+public:
+    std::optional<Coin> GetCoin(const COutPoint& outpoint) const override { return std::nullopt; }
+    bool HaveCoin(const COutPoint& outpoint) const override { return false; }
+    uint256 GetBestBlock() const override { return uint256(); }
+    bool BatchWrite(CoinsViewCacheCursor& cursor, const uint256& hashBlock) override { return true; }
+};
+
 const std::vector<std::string> CHECKLEVEL_DOC {
     "level 0 reads the blocks from disk",
     "level 1 verifies block validity",
@@ -2414,8 +2424,18 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
  *  Validity checks that depend on the UTXO set are also done; ConnectBlock()
  *  can fail if those validity checks fail (among other reasons). */
 bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
-                               CCoinsViewCache& view, bool fJustCheck)
+                               CCoinsViewCache& view, bool fJustCheck, bool fSkipUTXOValidation)
 {
+    if (fSkipUTXOValidation) {
+        if (!CheckBlock(block, state, m_chainman.GetConsensus())) {
+            return false;
+        }
+
+        pindex->nStatus |= BLOCK_HAVE_DATA;
+
+        return true;
+    }
+
     AssertLockHeld(cs_main);
     assert(pindex);
 
