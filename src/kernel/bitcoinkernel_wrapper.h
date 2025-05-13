@@ -413,6 +413,11 @@ public:
         kernel_chainstate_manager_options_set_chainstate_db_in_memory(m_options.get(), chainstate_db_in_memory);
     }
 
+    void SetBlockfilesOnly(bool blockfiles_only) const noexcept
+    {
+        kernel_chainstate_manager_options_set_blockfiles_only(m_options.get(), blockfiles_only);
+    }
+
     /** Check whether this ChainstateManagerOptions object is valid. */
     explicit operator bool() const noexcept { return bool{m_options}; }
 

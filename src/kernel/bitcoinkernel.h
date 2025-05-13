@@ -811,6 +811,17 @@ BITCOINKERNEL_API void kernel_chainstate_manager_options_set_chainstate_db_in_me
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
+ * @brief Sets blockfiles only mode in the options.
+ *
+ * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
+ * @param[in] blockfiles_only         Set blockfiles only mode. When true, the ChainstateManager gets initialized with blockfiles only.
+ */
+BITCOINKERNEL_API void kernel_chainstate_manager_options_set_blockfiles_only(
+        kernel_ChainstateManagerOptions* chainstate_manager_options,
+        bool blockfiles_only
+) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
  * Destroy the chainstate manager options.
  */
 BITCOINKERNEL_API void kernel_chainstate_manager_options_destroy(kernel_ChainstateManagerOptions* chainstate_manager_options);

@@ -1026,6 +1026,9 @@ public:
     /** chainwork for the last block that preciousblock has been applied to. */
     arith_uint256 nLastPreciousChainwork = 0;
 
+    // Methods to control Blockfiles only mode
+    void SetBlockfilesOnly(bool blockfiles_only) { m_blockfiles_only = blockfiles_only; }
+    bool IsBlockfilesOnly() const { return m_blockfiles_only; }
     // Reset the memory-only sequence counters we use to track block arrival
     // (used by tests to reset state)
     void ResetBlockSequenceCounters() EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
@@ -1059,6 +1062,9 @@ public:
 
     /** Best header we've seen so far (used for getheaders queries' starting points). */
     CBlockIndex* m_best_header GUARDED_BY(::cs_main){nullptr};
+
+    //! Flag to indicate if blockfiles only
+    bool m_blockfiles_only{false};
 
     //! The total number of bytes available for us to use across all in-memory
     //! coins caches. This will be split somehow across chainstates.
