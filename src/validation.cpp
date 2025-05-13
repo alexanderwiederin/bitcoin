@@ -2414,8 +2414,18 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
  *  Validity checks that depend on the UTXO set are also done; ConnectBlock()
  *  can fail if those validity checks fail (among other reasons). */
 bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
-                               CCoinsViewCache& view, bool fJustCheck)
+                               CCoinsViewCache& view, bool fJustCheck, bool fSkipUTXOValidation)
 {
+    if (fSkipUTXOValidation) {
+        if (!CheckBlock(block, state, m_chainman.GetConsensus())) {
+            return false;
+        }
+
+        pindex->nStatus |= BLOCK_HAVE_DATA;
+
+        return true;
+    }
+
     AssertLockHeld(cs_main);
     assert(pindex);
 

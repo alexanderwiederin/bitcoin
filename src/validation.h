@@ -708,7 +708,7 @@ public:
     DisconnectResult DisconnectBlock(const CBlock& block, const CBlockIndex* pindex, CCoinsViewCache& view)
         EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     bool ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
-                      CCoinsViewCache& view, bool fJustCheck = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+                      CCoinsViewCache& view, bool fJustCheck = false, bool fSkipUTXOValidation = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // Apply the effects of a block disconnection on the UTXO set.
     bool DisconnectTip(BlockValidationState& state, DisconnectedBlockTransactions* disconnectpool) EXCLUSIVE_LOCKS_REQUIRED(cs_main, m_mempool->cs);
@@ -1026,6 +1026,9 @@ public:
     /** chainwork for the last block that preciousblock has been applied to. */
     arith_uint256 nLastPreciousChainwork = 0;
 
+    // Methods to control UTXO database skipping
+    void SetSkipUTXODatabase(bool skip) { m_skip_utxo_db = skip; }
+    bool IsSkippingUTXODatabase() const { return m_skip_utxo_db; }
     // Reset the memory-only sequence counters we use to track block arrival
     // (used by tests to reset state)
     void ResetBlockSequenceCounters() EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
@@ -1059,6 +1062,9 @@ public:
 
     /** Best header we've seen so far (used for getheaders queries' starting points). */
     CBlockIndex* m_best_header GUARDED_BY(::cs_main){nullptr};
+
+    //! Flag to indicate if UTXO database should be skipped entirely
+    bool m_skip_utxo_db{false};
 
     //! The total number of bytes available for us to use across all in-memory
     //! coins caches. This will be split somehow across chainstates.
