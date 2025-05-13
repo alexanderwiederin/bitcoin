@@ -280,6 +280,7 @@ struct ChainstateManagerOptions {
     ChainstateManager::Options m_chainman_options GUARDED_BY(m_mutex);
     node::BlockManager::Options m_blockman_options GUARDED_BY(m_mutex);
     node::ChainstateLoadOptions m_chainstate_load_options GUARDED_BY(m_mutex);
+    bool skip_utxo_database{false};
 
     ChainstateManagerOptions(const Context* context, const fs::path& data_dir, const fs::path& blocks_dir)
         : m_chainman_options{ChainstateManager::Options{
@@ -781,6 +782,15 @@ void kernel_chainstate_manager_options_set_chainstate_db_in_memory(
     opts->m_chainstate_load_options.coins_db_in_memory = chainstate_db_in_memory;
 }
 
+void kernel_chainstate_manager_options_set_skip_utxo_database(
+        kernel_ChainstateManagerOptions *chainstate_manager_options_,
+        bool skip_utxo_database)
+{
+    auto opts{cast_chainstate_manager_options(chainstate_manager_options_)};
+    LOCK(opts->m_mutex);
+    opts->skip_utxo_database = skip_utxo_database;
+}
+
 kernel_ChainstateManager* kernel_chainstate_manager_create(
     const kernel_Context* context_,
     const kernel_ChainstateManagerOptions* chainman_opts_)
@@ -793,6 +803,10 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
     try {
         LOCK(chainman_opts->m_mutex);
         chainman = new ChainstateManager{*context->m_interrupt, chainman_opts->m_chainman_options, chainman_opts->m_blockman_options};
+
+        if (chainman_opts->skip_utxo_database) {
+            chainman->SetSkipUTXODatabase(true);
+        }
     } catch (const std::exception& e) {
         LogError("Failed to create chainstate manager: %s", e.what());
         return nullptr;

@@ -811,6 +811,17 @@ BITCOINKERNEL_API void kernel_chainstate_manager_options_set_chainstate_db_in_me
 ) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
+ * @brief Sets skip UTXO database in the options.
+ *
+ * @param[in] chainstate_manager_options Non-null, created by @ref kernel_chainstate_manager_options_create.
+ * @param[in] skip_utxo_database         Set skip UTXO database. When true, the UTXO database is not initialized.
+ */
+BITCOINKERNEL_API void kernel_chainstate_manager_options_set_skip_utxo_database(
+        kernel_ChainstateManagerOptions* chainstate_manager_options,
+        bool skip_utxo_database
+) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
  * Destroy the chainstate manager options.
  */
 BITCOINKERNEL_API void kernel_chainstate_manager_options_destroy(kernel_ChainstateManagerOptions* chainstate_manager_options);

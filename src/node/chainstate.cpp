@@ -167,6 +167,25 @@ ChainstateLoadResult LoadChainstate(ChainstateManager& chainman, const CacheSize
     // Load the fully validated chainstate.
     chainman.InitializeChainstate(options.mempool);
 
+    // Early return if skipping UTXO database - only initialize block-related components
+    if (chainman.IsSkippingUTXODatabase()) {
+        LogPrintf("Blockfiles-only mode: Skipping UTXO database initialization\n");
+
+        // Only load block index but skip all UTXO database operations
+        if (!chainman.LoadBlockIndex()) {
+            if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
+            return {ChainstateLoadStatus::FAILURE, _("Error loading block database")};
+        }
+
+        // Initialize chain with empty UTCO set
+        if (!chainman.BlockIndex().empty() &&
+                !chainman.ActiveChainstate().LoadGenesisBlock()) {
+            return {ChainstateLoadStatus::FAILURE, _("Error initializing block database")};
+        }
+
+        return {ChainstateLoadStatus::SUCCESS, {}};
+    }
+
     // Load a chain created from a UTXO snapshot, if any exist.
     bool has_snapshot = chainman.DetectSnapshotChainstate();
 
