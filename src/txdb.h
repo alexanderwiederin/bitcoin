@@ -61,4 +61,15 @@ public:
     std::optional<fs::path> StoragePath() { return m_db->StoragePath(); }
 };
 
+class NullCoinsView : public CCoinsView
+{
+public:
+    NullCoinsView() = default;
+
+    std::optional<Coin> GetCoin(const COutPoint& outpoint) const override;
+    bool HaveCoin(const COutPoint& outpoint) const override;
+    uint256 GetBestBlock() const override;
+    bool BatchWrite(CoinsViewCacheCursor& cursor, const uint256 &hashBlock) override;
+};
+
 #endif // BITCOIN_TXDB_H

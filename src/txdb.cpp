@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <optional>
 #include <txdb.h>
 
 #include <coins.h>
@@ -231,3 +232,9 @@ void CCoinsViewDBCursor::Next()
         keyTmp.first = entry.key;
     }
 }
+
+std::optional<Coin> NullCoinsView::GetCoin(const COutPoint& outpoint) const { return std::nullopt; }
+bool NullCoinsView::HaveCoin(const COutPoint& outpoint) const { return false; }
+uint256 NullCoinsView::GetBestBlock() const { return uint256(); }
+bool NullCoinsView::BatchWrite(CoinsViewCacheCursor& cursor, const uint256 &hashBlock) { return false; }
+
