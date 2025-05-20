@@ -99,15 +99,6 @@ static constexpr auto DATABASE_WRITE_INTERVAL_MAX{70min};
 /** Maximum age of our tip for us to be considered current for fee estimation */
 static constexpr std::chrono::hours MAX_FEE_ESTIMATION_TIP_AGE{3};
 
-// Create a dummy coins view class for when UTXO database is skipped
-class DummyCoinsView : public CCoinsView {
-public:
-    std::optional<Coin> GetCoin(const COutPoint& outpoint) const override { return std::nullopt; }
-    bool HaveCoin(const COutPoint& outpoint) const override { return false; }
-    uint256 GetBestBlock() const override { return uint256(); }
-    bool BatchWrite(CoinsViewCacheCursor& cursor, const uint256& hashBlock) override { return true; }
-};
-
 const std::vector<std::string> CHECKLEVEL_DOC {
     "level 0 reads the blocks from disk",
     "level 1 verifies block validity",
