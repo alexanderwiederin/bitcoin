@@ -1985,6 +1985,13 @@ void Chainstate::InitCoinsDB(
     bool should_wipe,
     fs::path leveldb_name)
 {
+    if (m_chainman.IsBlockfilesOnly()) {
+        LogPrintf("Initializing blockfiles-only mode with in-memory UTXO database\n");
+        // Setting in memory to true when in block-files only mode to prevent LevelDB initialization.
+        // The UTXO will never be properly initialized and functional.
+        in_memory = true;
+    }
+
     if (m_from_snapshot_blockhash) {
         leveldb_name += node::SNAPSHOT_CHAINSTATE_SUFFIX;
     }
