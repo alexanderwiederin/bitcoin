@@ -5762,7 +5762,7 @@ util::Result<CBlockIndex*> ChainstateManager::ActivateSnapshot(
 
     {
         LOCK(::cs_main);
-        snapshoIsSkippingUTXO()InitCoinsDB(
+        snapshot_chainstate->InitCoinsDB(
             static_cast<size_t>(current_coinsdb_cache_size * SNAPSHOT_CACHE_PERC),
             in_memory, false, "chainstate");
         snapshot_chainstate->InitCoinsCache(
