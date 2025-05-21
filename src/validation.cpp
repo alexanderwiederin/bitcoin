@@ -1986,6 +1986,7 @@ void Chainstate::InitCoinsDB(
     bool should_wipe,
     fs::path leveldb_name)
 {
+    fprintf(stderr, "\nCalling InitCoinsDB");
     if (m_chainman.IsSkippingUTXODatabase()) {
         LogPrintf("Initializing blockfiles-only mode with in-memory UTXO database\n");
         in_memory = true;
