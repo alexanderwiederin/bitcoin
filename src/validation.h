@@ -534,6 +534,7 @@ protected:
 
     //! Cached result of LookupBlockIndex(*m_from_snapshot_blockhash)
     const CBlockIndex* m_cached_snapshot_base GUARDED_BY(::cs_main) {nullptr};
+    bool m_skip_utxo{false};
 
 public:
     //! Reference to a BlockManager instance which itself is shared across all
@@ -544,6 +545,9 @@ public:
     //! necessary so that this instance can check whether it is the active
     //! chainstate within deeply nested method calls.
     ChainstateManager& m_chainman;
+
+    void SetSkipUTXO(bool skip) { m_skip_utxo = skip; }
+    bool IsSkippingUTXO() const { return m_skip_utxo; }
 
     explicit Chainstate(
         CTxMemPool* mempool,
@@ -578,6 +582,9 @@ public:
     bool CanFlushToDisk() const EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
     {
         AssertLockHeld(::cs_main);
+        if (IsSkippingUTXO()) {
+            return true;
+        }
         return m_coins_views && m_coins_views->m_cacheview;
     }
 
@@ -612,12 +619,6 @@ public:
     CCoinsViewCache& CoinsTip() EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
     {
         AssertLockHeld(::cs_main);
-
-        if (!m_coins_views) {
-            static NullCoinsView null_coins_view;
-            static CCoinsViewCache null_cache(&null_coins_view);
-            return null_cache;
-        }
 
         Assert(m_coins_views);
         return *Assert(m_coins_views->m_cacheview);
