@@ -1986,6 +1986,12 @@ void Chainstate::InitCoinsDB(
     bool should_wipe,
     fs::path leveldb_name)
 {
+    if (m_chainman.IsSkippingUTXODatabase()) {
+        LogPrintf("Initializing blockfiles-only mode with in-memory UTXO database\n");
+        in_memory = true;
+        cache_size_bytes = 1024 * 1024;
+    }
+
     if (m_from_snapshot_blockhash) {
         leveldb_name += node::SNAPSHOT_CHAINSTATE_SUFFIX;
     }
@@ -2001,6 +2007,11 @@ void Chainstate::InitCoinsDB(
         m_chainman.m_options.coins_view);
 
     m_coinsdb_cache_size_bytes = cache_size_bytes;
+
+    if (m_chainman.IsSkippingUTXODatabase()) {
+        LogPrintf("Warning: Using in-memory UTXO database on blockfiles-only mode\n");
+        LogPrintf("UTXO operations will work but data won't be persisted\n");
+    }
 }
 
 void Chainstate::InitCoinsCache(size_t cache_size_bytes)
