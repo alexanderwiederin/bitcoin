@@ -2009,6 +2009,7 @@ void Chainstate::InitCoinsDB(
     m_coinsdb_cache_size_bytes = cache_size_bytes;
 
     if (m_chainman.IsSkippingUTXODatabase()) {
+        fprintf(stderr, "IS SKIPPING UTXO");
         LogPrintf("Warning: Using in-memory UTXO database on blockfiles-only mode\n");
         LogPrintf("UTXO operations will work but data won't be persisted\n");
     }
@@ -5761,7 +5762,7 @@ util::Result<CBlockIndex*> ChainstateManager::ActivateSnapshot(
 
     {
         LOCK(::cs_main);
-        snapshot_chainstate->InitCoinsDB(
+        snapshoIsSkippingUTXO()InitCoinsDB(
             static_cast<size_t>(current_coinsdb_cache_size * SNAPSHOT_CACHE_PERC),
             in_memory, false, "chainstate");
         snapshot_chainstate->InitCoinsCache(
