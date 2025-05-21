@@ -831,6 +831,9 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
 
         for (Chainstate* chainstate : WITH_LOCK(chainman->GetMutex(), return chainman->GetAll())) {
             BlockValidationState state;
+            if (chainman->IsBlockfilesOnly()) {
+                chainstate->SetBlockfilesOnly(true);
+            }
             if (!chainstate->ActivateBestChain(state, nullptr)) {
                 LogError("Failed to connect best block: %s", state.ToString());
                 kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);

@@ -534,6 +534,7 @@ protected:
 
     //! Cached result of LookupBlockIndex(*m_from_snapshot_blockhash)
     const CBlockIndex* m_cached_snapshot_base GUARDED_BY(::cs_main) {nullptr};
+    bool m_blockfiles_only{false};
 
 public:
     //! Reference to a BlockManager instance which itself is shared across all
@@ -544,6 +545,9 @@ public:
     //! necessary so that this instance can check whether it is the active
     //! chainstate within deeply nested method calls.
     ChainstateManager& m_chainman;
+
+    void SetBlockfilesOnly(bool blockfiles_only) { m_blockfiles_only = blockfiles_only; }
+    bool IsBlockfilesOnly() const { return m_blockfiles_only; }
 
     explicit Chainstate(
         CTxMemPool* mempool,
