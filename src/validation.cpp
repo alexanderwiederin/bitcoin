@@ -2889,10 +2889,11 @@ bool Chainstate::FlushStateToDisk(
         // Write blocks, block index and best chain related state to disk.
         if (should_write) {
             // Ensure we can write block index
-            fprintf(stderr, "Calling FlushStateToDisk 1 - should write");
+            fprintf(stderr, "\nCalling FlushStateToDisk 1 - should write\n");
             if (!CheckDiskSpace(m_blockman.m_opts.blocks_dir)) {
                 return FatalError(m_chainman.GetNotifications(), state, _("Disk space is too low!"));
             }
+            fprintf(stderr, "\nCalling FlushStateToDisk 2 - should write\n");
             {
                 LOG_TIME_MILLIS_WITH_CATEGORY("write block and undo data to disk", BCLog::BENCH);
 
@@ -2903,6 +2904,7 @@ bool Chainstate::FlushStateToDisk(
                     LogPrintLevel(BCLog::VALIDATION, BCLog::Level::Warning, "%s: Failed to flush block file.\n", __func__);
                 }
             }
+            fprintf(stderr, "\nCalling FlushStateToDisk 3 - should write\n");
 
             // Then update all block file information (which may refer to block and undo files).
             {
