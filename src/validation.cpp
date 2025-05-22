@@ -3589,9 +3589,9 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             // If a background chainstate is in use, we may need to rebalance our
             // allocation of caches once a chainstate exits initial block download.
             LOCK(::cs_main);
+            fprintf(stderr, "Calling ActiveBestChain 2");
             m_chainman.MaybeRebalanceCaches();
         }
-        fprintf(stderr, "Calling ActiveBestChain 2");
 
         if (WITH_LOCK(::cs_main, return m_disabled)) {
             // Background chainstate has reached the snapshot base block, so exit.
