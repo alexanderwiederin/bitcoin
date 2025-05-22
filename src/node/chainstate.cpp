@@ -263,7 +263,9 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
     for (Chainstate* chainstate : chainman.GetAll()) {
         fprintf(stderr, "Calling VerifyLoadedChainstate 1");
         if (!is_coinsview_empty(chainstate)) {
+            fprintf(stderr, "Calling VerifyLoadedChainstate 2");
             const CBlockIndex* tip = chainstate->m_chain.Tip();
+            fprintf(stderr, "Calling VerifyLoadedChainstate 3");
             if (tip && tip->nTime > GetTime() + MAX_FUTURE_BLOCK_TIME) {
                 return {ChainstateLoadStatus::FAILURE, _("The block database contains a block which appears to be from the future. "
                                                          "This may be due to your computer's date and time being set incorrectly. "
@@ -290,7 +292,6 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
                 break;
             } // no default case, so the compiler can warn about missing cases
         }
-        fprintf(stderr, "Calling VerifyLoadedChainstate 2");
     }
 
     return {ChainstateLoadStatus::SUCCESS, {}};
