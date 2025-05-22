@@ -261,8 +261,8 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
     LOCK(cs_main);
 
     for (Chainstate* chainstate : chainman.GetAll()) {
+        fprintf(stderr, "Calling VerifyLoadedChainstate 1");
         if (!is_coinsview_empty(chainstate)) {
-            fprintf(stderr, "Calling VerifyLoadedChainstate 1");
             const CBlockIndex* tip = chainstate->m_chain.Tip();
             if (tip && tip->nTime > GetTime() + MAX_FUTURE_BLOCK_TIME) {
                 return {ChainstateLoadStatus::FAILURE, _("The block database contains a block which appears to be from the future. "
