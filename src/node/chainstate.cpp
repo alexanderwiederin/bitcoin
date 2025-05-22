@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <cstdio>
 #include <node/chainstate.h>
 
 #include <arith_uint256.h>
@@ -35,8 +36,10 @@ static ChainstateLoadResult CompleteChainstateInitialization(
     ChainstateManager& chainman,
     const ChainstateLoadOptions& options) EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
 {
+    fprintf(stderr, "Calling CompleteChainstateInitialization 1");
     if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
 
+    fprintf(stderr, "Calling CompleteChainstateInitialization 2");
     // LoadBlockIndex will load m_have_pruned if we've ever removed a
     // block file from disk.
     // Note that it also sets m_blockfiles_indexed based on the disk flag!
@@ -44,6 +47,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
         if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
         return {ChainstateLoadStatus::FAILURE, _("Error loading block database")};
     }
+    fprintf(stderr, "Calling CompleteChainstateInitialization 3");
 
     if (!chainman.BlockIndex().empty() &&
             !chainman.m_blockman.LookupBlockIndex(chainman.GetConsensus().hashGenesisBlock)) {
@@ -51,12 +55,14 @@ static ChainstateLoadResult CompleteChainstateInitialization(
         // (we're likely using a testnet datadir, or the other way around).
         return {ChainstateLoadStatus::FAILURE_INCOMPATIBLE_DB, _("Incorrect or no genesis block found. Wrong datadir for network?")};
     }
+    fprintf(stderr, "Calling CompleteChainstateInitialization 4");
 
     // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
     // in the past, but is now trying to run unpruned.
     if (chainman.m_blockman.m_have_pruned && !options.prune) {
         return {ChainstateLoadStatus::FAILURE, _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain")};
     }
+    fprintf(stderr, "Calling CompleteChainstateInitialization 5");
 
     // At this point blocktree args are consistent with what's on disk.
     // If we're not mid-reindex (based on disk + args), add a genesis block on disk
