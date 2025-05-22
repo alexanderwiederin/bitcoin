@@ -2963,6 +2963,7 @@ bool Chainstate::FlushStateToDisk(
     }
     fprintf(stderr, "\nCalling FlushStateToDisk 7\n");
     } catch (const std::runtime_error& e) {
+        fprintf(stderr, "\nCalling FlushStateToDisk 8\n");
         return FatalError(m_chainman.GetNotifications(), state, strprintf(_("System error while flushing: %s"), e.what()));
     }
     return true;
