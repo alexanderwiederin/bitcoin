@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <cstdio>
 #define BITCOINKERNEL_BUILD
 
 #include <kernel/bitcoinkernel.h>
@@ -829,14 +830,17 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
             return nullptr;
         }
 
+        fprintf(stderr, "calling kernel_chainstate_manager_create 1");
         for (Chainstate* chainstate : WITH_LOCK(chainman->GetMutex(), return chainman->GetAll())) {
             BlockValidationState state;
             if (!chainstate->ActivateBestChain(state, nullptr)) {
+                fprintf(stderr, "calling kernel_chainstate_manager_create 2");
                 LogError("Failed to connect best block: %s", state.ToString());
                 kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
                 return nullptr;
             }
         }
+        fprintf(stderr, "calling kernel_chainstate_manager_create 3");
     } catch (const std::exception& e) {
         LogError("Failed to load chainstate: %s", e.what());
         return nullptr;
