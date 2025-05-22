@@ -256,6 +256,7 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
     auto is_coinsview_empty = [&](Chainstate* chainstate) EXCLUSIVE_LOCKS_REQUIRED(::cs_main) {
         return options.wipe_chainstate_db || chainstate->CoinsTip().GetBestBlock().IsNull();
     };
+    fprintf(stderr, "Calling VerifyLoadedChainstate 0");
 
     LOCK(cs_main);
 
