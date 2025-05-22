@@ -5686,6 +5686,7 @@ util::Result<CBlockIndex*> ChainstateManager::ActivateSnapshot(
         bool in_memory)
 {
     uint256 base_blockhash = metadata.m_base_blockhash;
+    fprintf(stderr, "Calling ActivateSnapshot");
 
     if (this->SnapshotBlockhash()) {
         return util::Error{Untranslated("Can't activate a snapshot-based chainstate more than once")};
