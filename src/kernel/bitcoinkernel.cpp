@@ -809,6 +809,8 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
         if (chainman_opts->skip_utxo_database) {
             chainman->SetSkipUTXODatabase(true);
         }
+
+        fprintf(stderr, "Calling kernel_chainstate_manager_create 1");
     } catch (const std::exception& e) {
         LogError("Failed to create chainstate manager: %s", e.what());
         return nullptr;
@@ -819,6 +821,7 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
 
         kernel::CacheSizes cache_sizes{DEFAULT_KERNEL_CACHE};
         auto [status, chainstate_err]{node::LoadChainstate(*chainman, cache_sizes, chainstate_load_opts)};
+        fprintf(stderr, "calling kernel_chainstate_manager_create 2: %d\n", static_cast<int>(status));
         if (status != node::ChainstateLoadStatus::SUCCESS) {
             LogError("Failed to load chain state from your data directory: %s", chainstate_err.original);
             kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
@@ -831,7 +834,6 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
             return nullptr;
         }
 
-        fprintf(stderr, "calling kernel_chainstate_manager_create 1");
         for (Chainstate* chainstate : WITH_LOCK(chainman->GetMutex(), return chainman->GetAll())) {
             BlockValidationState state;
             if (!chainstate->ActivateBestChain(state, nullptr)) {
