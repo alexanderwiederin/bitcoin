@@ -827,6 +827,7 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
             kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
             return nullptr;
         }
+        fprintf(stderr, "calling kernel_chainstate_manager_create TEST");
         std::tie(status, chainstate_err) = node::VerifyLoadedChainstate(*chainman, chainstate_load_opts);
         fprintf(stderr, "calling kernel_chainstate_manager_create 3: %d\n", static_cast<int>(status));
         if (status != node::ChainstateLoadStatus::SUCCESS) {
