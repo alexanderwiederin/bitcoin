@@ -798,6 +798,7 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
 {
     auto chainman_opts{cast_const_chainstate_manager_options(chainman_opts_)};
     auto context{cast_const_context(context_)};
+    fprintf(stderr, "Calling kernel_chainstate_manager_create 0");
 
     ChainstateManager* chainman;
 
