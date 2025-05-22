@@ -3481,6 +3481,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             "Please report this as a bug. %s\n", CLIENT_BUGREPORT);
         return false;
     }
+    fprintf(stderr, "Calling ActiveBestChain 1");
 
     CBlockIndex *pindexMostWork = nullptr;
     CBlockIndex *pindexNewTip = nullptr;
@@ -3498,6 +3499,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             LOCK(cs_main);
             {
             // Lock transaction pool for at least as long as it takes for connectTrace to be consumed
+            fprintf(stderr, "Calling ActiveBestChain 2");
             LOCK(MempoolMutex());
             const bool was_in_ibd = m_chainman.IsInitialBlockDownload();
             CBlockIndex* starting_tip = m_chain.Tip();
@@ -3559,6 +3561,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                 // Active chainstate has exited IBD.
                 exited_ibd = true;
             }
+            fprintf(stderr, "Calling ActiveBestChain 3");
 
             // Notify external listeners about the new tip.
             // Enqueue while holding cs_main to ensure that UpdatedBlockTip is called in the order in which blocks are connected
