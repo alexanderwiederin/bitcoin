@@ -827,7 +827,6 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
             kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
             return nullptr;
         }
-        fprintf(stderr, "calling kernel_chainstate_manager_create TEST");
         std::tie(status, chainstate_err) = node::VerifyLoadedChainstate(*chainman, chainstate_load_opts);
         fprintf(stderr, "calling kernel_chainstate_manager_create 3: %d\n", static_cast<int>(status));
         if (status != node::ChainstateLoadStatus::SUCCESS) {
@@ -842,10 +841,11 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
                 fprintf(stderr, "calling kernel_chainstate_manager_create 4");
                 LogError("Failed to connect best block: %s", state.ToString());
                 kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
+                fprintf(stderr, "calling kernel_chainstate_manager_create 5");
                 return nullptr;
             }
         }
-        fprintf(stderr, "calling kernel_chainstate_manager_create 3");
+        fprintf(stderr, "calling kernel_chainstate_manager_create 6");
     } catch (const std::exception& e) {
         LogError("Failed to load chainstate: %s", e.what());
         return nullptr;
