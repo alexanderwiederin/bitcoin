@@ -828,6 +828,7 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
             return nullptr;
         }
         std::tie(status, chainstate_err) = node::VerifyLoadedChainstate(*chainman, chainstate_load_opts);
+        fprintf(stderr, "calling kernel_chainstate_manager_create 3: %d\n", static_cast<int>(status));
         if (status != node::ChainstateLoadStatus::SUCCESS) {
             LogError("Failed to verify loaded chain state from your datadir: %s", chainstate_err.original);
             kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
@@ -837,7 +838,7 @@ kernel_ChainstateManager* kernel_chainstate_manager_create(
         for (Chainstate* chainstate : WITH_LOCK(chainman->GetMutex(), return chainman->GetAll())) {
             BlockValidationState state;
             if (!chainstate->ActivateBestChain(state, nullptr)) {
-                fprintf(stderr, "calling kernel_chainstate_manager_create 2");
+                fprintf(stderr, "calling kernel_chainstate_manager_create 4");
                 LogError("Failed to connect best block: %s", state.ToString());
                 kernel_chainstate_manager_destroy(reinterpret_cast<kernel_ChainstateManager*>(chainman), context_);
                 return nullptr;
