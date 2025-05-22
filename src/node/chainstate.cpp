@@ -261,6 +261,7 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
     LOCK(cs_main);
 
     for (Chainstate* chainstate : chainman.GetAll()) {
+        fprintf(stderr, "Calling VerifyLoadedChainstate 1");
         if (!is_coinsview_empty(chainstate)) {
             const CBlockIndex* tip = chainstate->m_chain.Tip();
             if (tip && tip->nTime > GetTime() + MAX_FUTURE_BLOCK_TIME) {
@@ -274,7 +275,6 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
                 options.check_level,
                 options.check_blocks);
 
-            fprintf(stderr, "Calling VerifyLoadedChainstate 2");
             switch (result) {
             case VerifyDBResult::SUCCESS:
             case VerifyDBResult::SKIPPED_MISSING_BLOCKS:
@@ -290,8 +290,8 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
                 break;
             } // no default case, so the compiler can warn about missing cases
         }
+        fprintf(stderr, "Calling VerifyLoadedChainstate 2");
     }
-    fprintf(stderr, "Calling VerifyLoadedChainstate 1");
 
     return {ChainstateLoadStatus::SUCCESS, {}};
 }
