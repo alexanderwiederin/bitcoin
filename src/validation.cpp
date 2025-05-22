@@ -2823,11 +2823,9 @@ bool Chainstate::FlushStateToDisk(
     int nManualPruneHeight)
 {
     LOCK(cs_main);
-    fprintf(stderr, "Calling FlushStateToDisk 0");
     assert(this->CanFlushToDisk());
     std::set<int> setFilesToPrune;
     bool full_flush_completed = false;
-    fprintf(stderr, "Calling FlushStateToDisk 1");
 
     const size_t coins_count = CoinsTip().GetCacheSize();
     const size_t coins_mem_usage = CoinsTip().DynamicMemoryUsage();
@@ -2891,6 +2889,7 @@ bool Chainstate::FlushStateToDisk(
         // Write blocks, block index and best chain related state to disk.
         if (should_write) {
             // Ensure we can write block index
+            fprintf(stderr, "Calling FlushStateToDisk 1 - should write");
             if (!CheckDiskSpace(m_blockman.m_opts.blocks_dir)) {
                 return FatalError(m_chainman.GetNotifications(), state, _("Disk space is too low!"));
             }
