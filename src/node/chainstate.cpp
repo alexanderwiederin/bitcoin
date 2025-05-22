@@ -164,6 +164,7 @@ ChainstateLoadResult LoadChainstate(ChainstateManager& chainman, const CacheSize
     } else if (chainman.m_blockman.GetPruneTarget()) {
         LogPrintf("Prune configured to target %u MiB on disk for block and undo files.\n", chainman.m_blockman.GetPruneTarget() / 1024 / 1024);
     }
+    fprintf(stderr, "LoadChainstate \n");
 
     LOCK(cs_main);
 
