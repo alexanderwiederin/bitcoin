@@ -3591,6 +3591,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             LOCK(::cs_main);
             m_chainman.MaybeRebalanceCaches();
         }
+        fprintf(stderr, "Calling ActiveBestChain 2");
 
         if (WITH_LOCK(::cs_main, return m_disabled)) {
             // Background chainstate has reached the snapshot base block, so exit.
