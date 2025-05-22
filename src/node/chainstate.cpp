@@ -254,6 +254,9 @@ ChainstateLoadResult LoadChainstate(ChainstateManager& chainman, const CacheSize
 ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const ChainstateLoadOptions& options)
 {
     auto is_coinsview_empty = [&](Chainstate* chainstate) EXCLUSIVE_LOCKS_REQUIRED(::cs_main) {
+        fprintf(stderr, "Calling VerifyLoadedChainstate 2");
+        chainstate->CoinsTip();
+        fprintf(stderr, "Calling VerifyLoadedChainstate 3");
         return options.wipe_chainstate_db || chainstate->CoinsTip().GetBestBlock().IsNull();
     };
     fprintf(stderr, "Calling VerifyLoadedChainstate 0");
@@ -263,7 +266,6 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
     for (Chainstate* chainstate : chainman.GetAll()) {
         fprintf(stderr, "Calling VerifyLoadedChainstate 1");
         if (!is_coinsview_empty(chainstate)) {
-            fprintf(stderr, "Calling VerifyLoadedChainstate 2");
             const CBlockIndex* tip = chainstate->m_chain.Tip();
             if (tip && tip->nTime > GetTime() + MAX_FUTURE_BLOCK_TIME) {
                 return {ChainstateLoadStatus::FAILURE, _("The block database contains a block which appears to be from the future. "
@@ -291,7 +293,6 @@ ChainstateLoadResult VerifyLoadedChainstate(ChainstateManager& chainman, const C
                 break;
             } // no default case, so the compiler can warn about missing cases
         }
-        fprintf(stderr, "Calling VerifyLoadedChainstate 3");
     }
 
     return {ChainstateLoadStatus::SUCCESS, {}};
