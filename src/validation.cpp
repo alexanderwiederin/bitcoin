@@ -2889,11 +2889,9 @@ bool Chainstate::FlushStateToDisk(
         // Write blocks, block index and best chain related state to disk.
         if (should_write) {
             // Ensure we can write block index
-            fprintf(stderr, "\nCalling FlushStateToDisk 1 - should write\n");
             if (!CheckDiskSpace(m_blockman.m_opts.blocks_dir)) {
                 return FatalError(m_chainman.GetNotifications(), state, _("Disk space is too low!"));
             }
-            fprintf(stderr, "\nCalling FlushStateToDisk 2 - should write\n");
             {
                 LOG_TIME_MILLIS_WITH_CATEGORY("write block and undo data to disk", BCLog::BENCH);
 
@@ -2904,7 +2902,6 @@ bool Chainstate::FlushStateToDisk(
                     LogPrintLevel(BCLog::VALIDATION, BCLog::Level::Warning, "%s: Failed to flush block file.\n", __func__);
                 }
             }
-            fprintf(stderr, "\nCalling FlushStateToDisk 3 - should write\n");
 
             // Then update all block file information (which may refer to block and undo files).
             {
@@ -2914,7 +2911,6 @@ bool Chainstate::FlushStateToDisk(
                     return FatalError(m_chainman.GetNotifications(), state, _("Failed to write to block index database."));
                 }
             }
-            fprintf(stderr, "\nCalling FlushStateToDisk 4 - should write\n");
             // Finally remove any pruned files
             if (fFlushForPrune) {
                 LOG_TIME_MILLIS_WITH_CATEGORY("unlink pruned files", BCLog::BENCH);
@@ -2949,21 +2945,17 @@ bool Chainstate::FlushStateToDisk(
                     (bool)fFlushForPrune);
             }
         }
-        fprintf(stderr, "\nCalling FlushStateToDisk 5 - should write\n");
 
         if (should_write || m_next_write == NodeClock::time_point::max()) {
             constexpr auto range{DATABASE_WRITE_INTERVAL_MAX - DATABASE_WRITE_INTERVAL_MIN};
             m_next_write = FastRandomContext().rand_uniform_delay(NodeClock::now() + DATABASE_WRITE_INTERVAL_MIN, range);
         }
     }
-    fprintf(stderr, "\nCalling FlushStateToDisk 6\n");
     if (full_flush_completed && m_chainman.m_options.signals) {
         // Update best block in wallet (so we can detect restored wallets).
         m_chainman.m_options.signals->ChainStateFlushed(this->GetRole(), m_chain.GetLocator());
     }
-    fprintf(stderr, "\nCalling FlushStateToDisk 7\n");
     } catch (const std::runtime_error& e) {
-        fprintf(stderr, "\nCalling FlushStateToDisk 8\n");
         return FatalError(m_chainman.GetNotifications(), state, strprintf(_("System error while flushing: %s"), e.what()));
     }
     return true;
