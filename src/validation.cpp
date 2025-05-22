@@ -2823,9 +2823,11 @@ bool Chainstate::FlushStateToDisk(
     int nManualPruneHeight)
 {
     LOCK(cs_main);
+    fprintf(stderr, "Calling FlushStateToDisk 0");
     assert(this->CanFlushToDisk());
     std::set<int> setFilesToPrune;
     bool full_flush_completed = false;
+    fprintf(stderr, "Calling FlushStateToDisk 1");
 
     const size_t coins_count = CoinsTip().GetCacheSize();
     const size_t coins_mem_usage = CoinsTip().DynamicMemoryUsage();
