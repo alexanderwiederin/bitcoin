@@ -205,6 +205,7 @@ ChainstateLoadResult LoadChainstate(ChainstateManager& chainman, const CacheSize
 
     auto [init_status, init_error] = CompleteChainstateInitialization(chainman, options);
     if (init_status != ChainstateLoadStatus::SUCCESS) {
+        fprintf(stderr, "INIT STATUS LOADCHAINSTATE: %d", static_cast<int>(init_status));
         return {init_status, init_error};
     }
 

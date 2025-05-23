@@ -3608,8 +3608,6 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             }
             break;
         }
-        fprintf(stderr, "Calling ActiveBestChain 3");
-
 
         // We check interrupt only after giving ActivateBestChainStep a chance to run once so that we
         // never interrupt before connecting the genesis block during LoadChainTip(). Previously this
