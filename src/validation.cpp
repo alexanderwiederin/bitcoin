@@ -3361,6 +3361,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
         }
         fBlocksDisconnected = true;
     }
+    fprintf(stderr, "Calling ActiveBestChainStep 1");
 
     // Build list of new blocks to connect (in descending height order).
     std::vector<CBlockIndex*> vpindexToConnect;
@@ -3408,6 +3409,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
             }
         }
     }
+    fprintf(stderr, "Calling ActiveBestChainStep 2");
 
     if (fBlocksDisconnected) {
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
@@ -3553,7 +3555,6 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                 }
             } while (!m_chain.Tip() || (starting_tip && CBlockIndexWorkComparator()(m_chain.Tip(), starting_tip)));
 
-            fprintf(stderr, "Calling ActiveBestChain 3: blocks_conntected: %d", static_cast<bool>(blocks_connected));
             if (!blocks_connected) return true;
 
             const CBlockIndex* pindexFork = m_chain.FindFork(starting_tip);
