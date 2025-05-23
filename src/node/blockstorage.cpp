@@ -982,6 +982,7 @@ bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos) const
 
     // Check the header
     if (!CheckProofOfWork(block.GetHash(), block.nBits, GetConsensus())) {
+        fprintf(stderr, "\nCalling ReadBlock v2. 1");
         LogError("Errors in block header at %s while reading block", pos.ToString());
         return false;
     }
