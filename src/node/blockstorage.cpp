@@ -965,10 +965,12 @@ bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationSt
 bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos) const
 {
     block.SetNull();
+    fprintf(stderr, "\nCalling ReadBlock v2. 1");
 
     // Open history file to read
     std::vector<uint8_t> block_data;
     if (!ReadRawBlock(block_data, pos)) {
+        fprintf(stderr, "\nCalling ReadBlock v2. 2");
         return false;
     }
 
@@ -976,19 +978,21 @@ bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos) const
         // Read block
         SpanReader{block_data} >> TX_WITH_WITNESS(block);
     } catch (const std::exception& e) {
+        fprintf(stderr, "\nCalling ReadBlock v2. 3");
         LogError("Deserialize or I/O error - %s at %s while reading block", e.what(), pos.ToString());
         return false;
     }
 
     // Check the header
     if (!CheckProofOfWork(block.GetHash(), block.nBits, GetConsensus())) {
-        fprintf(stderr, "\nCalling ReadBlock v2. 1");
+        fprintf(stderr, "\nCalling ReadBlock v2. 4");
         LogError("Errors in block header at %s while reading block", pos.ToString());
         return false;
     }
 
     // Signet only: check block solution
     if (GetConsensus().signet_blocks && !CheckSignetBlockSolution(block, GetConsensus())) {
+        fprintf(stderr, "\nCalling ReadBlock v2. 5");
         LogError("Errors in block solution at %s while reading block", pos.ToString());
         return false;
     }
