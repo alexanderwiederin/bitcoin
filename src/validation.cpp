@@ -3161,6 +3161,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
 {
     AssertLockHeld(cs_main);
     if (m_mempool) AssertLockHeld(m_mempool->cs);
+    fprintf(stderr, "\nCalling ConnectTip 1");
 
     assert(pindexNew->pprev == m_chain.Tip());
     // Read block from disk.
@@ -3176,6 +3177,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
         LogDebug(BCLog::BENCH, "  - Using cached block\n");
         pthisBlock = pblock;
     }
+    fprintf(stderr, "\nCalling ConnectTip 2");
     const CBlock& blockConnecting = *pthisBlock;
     // Apply the block atomically to the chain state.
     const auto time_2{SteadyClock::now()};
@@ -3206,6 +3208,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
         bool flushed = view.Flush();
         assert(flushed);
     }
+    fprintf(stderr, "\nCalling ConnectTip 3");
     const auto time_4{SteadyClock::now()};
     m_chainman.time_flush += time_4 - time_3;
     LogDebug(BCLog::BENCH, "  - Flush: %.2fms [%.2fs (%.2fms/blk)]\n",
@@ -3216,6 +3219,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
     if (!FlushStateToDisk(state, FlushStateMode::IF_NEEDED)) {
         return false;
     }
+    fprintf(stderr, "\nCalling ConnectTip 4");
     const auto time_5{SteadyClock::now()};
     m_chainman.time_chainstate += time_5 - time_4;
     LogDebug(BCLog::BENCH, "  - Writing chainstate: %.2fms [%.2fs (%.2fms/blk)]\n",
