@@ -3170,6 +3170,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
     if (!pblock) {
         std::shared_ptr<CBlock> pblockNew = std::make_shared<CBlock>();
         if (!m_blockman.ReadBlock(*pblockNew, *pindexNew)) {
+            fprintf(stderr, "\nCalling ConnectTip 1.5");
             return FatalError(m_chainman.GetNotifications(), state, _("Failed to read block."));
         }
         pthisBlock = pblockNew;
