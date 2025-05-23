@@ -3382,7 +3382,9 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
         // Connect new blocks.
         for (CBlockIndex* pindexConnect : vpindexToConnect | std::views::reverse) {
             if (!ConnectTip(state, pindexConnect, pindexConnect == pindexMostWork ? pblock : std::shared_ptr<const CBlock>(), connectTrace, disconnectpool)) {
+                fprintf(stderr, "\nCalling ActiveBestChainStep 1");
                 if (state.IsInvalid()) {
+                    fprintf(stderr, "\nCalling ActiveBestChainStep 2");
                     // The block violates a consensus rule.
                     if (state.GetResult() != BlockValidationResult::BLOCK_MUTATED) {
                         InvalidChainFound(vpindexToConnect.front());
@@ -3395,7 +3397,6 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
                     // A system error occurred (disk space, database error, ...).
                     // Make the mempool consistent with the current tip, just in case
                     // any observers try to use it before shutdown.
-                    fprintf(stderr, "Calling ActiveBestChainStep 1");
                     MaybeUpdateMempoolForReorg(disconnectpool, false);
                     return false;
                 }
@@ -3409,7 +3410,6 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
             }
         }
     }
-    fprintf(stderr, "Calling ActiveBestChainStep 2");
 
     if (fBlocksDisconnected) {
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
