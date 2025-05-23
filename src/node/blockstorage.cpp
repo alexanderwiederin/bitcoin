@@ -1038,6 +1038,7 @@ bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& 
         MessageStartChars blk_start;
         unsigned int blk_size;
 
+        fprintf(stderr, "\nCalling ReadRawBlock 3.25");
         filein >> blk_start >> blk_size;
         fprintf(stderr, "\nCalling ReadRawBlock 3.5");
 
