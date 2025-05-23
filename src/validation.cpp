@@ -3525,6 +3525,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                const ChainstateRole chainstate_role{this->GetRole()};
                 if (!ActivateBestChainStep(state, pindexMostWork, pblock && pblock->GetHash() == pindexMostWork->GetBlockHash() ? pblock : nullBlockPtr, fInvalidFound, connectTrace)) {
                     // A system error occurred
+                    fprintf(stderr, "Calling ActiveBestChain 2");
                     return false;
                 }
                 blocks_connected = true;
@@ -3551,6 +3552,8 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     break;
                 }
             } while (!m_chain.Tip() || (starting_tip && CBlockIndexWorkComparator()(m_chain.Tip(), starting_tip)));
+
+            fprintf(stderr, "Calling ActiveBestChain 3: blocks_conntected: %d", static_cast<bool>(blocks_connected));
             if (!blocks_connected) return true;
 
             const CBlockIndex* pindexFork = m_chain.FindFork(starting_tip);
@@ -3589,7 +3592,6 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             // If a background chainstate is in use, we may need to rebalance our
             // allocation of caches once a chainstate exits initial block download.
             LOCK(::cs_main);
-            fprintf(stderr, "Calling ActiveBestChain 2");
 
             m_chainman.MaybeRebalanceCaches();
         }
