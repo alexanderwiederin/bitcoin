@@ -3361,7 +3361,6 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
         }
         fBlocksDisconnected = true;
     }
-    fprintf(stderr, "Calling ActiveBestChainStep 1");
 
     // Build list of new blocks to connect (in descending height order).
     std::vector<CBlockIndex*> vpindexToConnect;
@@ -3396,6 +3395,7 @@ bool Chainstate::ActivateBestChainStep(BlockValidationState& state, CBlockIndex*
                     // A system error occurred (disk space, database error, ...).
                     // Make the mempool consistent with the current tip, just in case
                     // any observers try to use it before shutdown.
+                    fprintf(stderr, "Calling ActiveBestChainStep 1");
                     MaybeUpdateMempoolForReorg(disconnectpool, false);
                     return false;
                 }
@@ -3527,7 +3527,6 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                const ChainstateRole chainstate_role{this->GetRole()};
                 if (!ActivateBestChainStep(state, pindexMostWork, pblock && pblock->GetHash() == pindexMostWork->GetBlockHash() ? pblock : nullBlockPtr, fInvalidFound, connectTrace)) {
                     // A system error occurred
-                    fprintf(stderr, "Calling ActiveBestChain 2");
                     return false;
                 }
                 blocks_connected = true;
