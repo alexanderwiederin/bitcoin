@@ -1039,7 +1039,24 @@ bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& 
         unsigned int blk_size;
 
         fprintf(stderr, "\nCalling ReadRawBlock 3.25");
-        filein >> blk_start >> blk_size;
+
+        try {
+
+            filein >> blk_start;
+            fprintf(stderr, "\nSuccessfully read amgic bytes");
+        } catch (const std::exception& e) {
+            fprintf(stderr, "\nException while reading magic bytes: %s", e.what());
+            throw;
+        }
+
+        try {
+            filein >> blk_size;
+            fprintf(stderr, "\nSuccessfully read block size: %u", blk_size);
+        } catch (const std::exception& e) {
+            fprintf(stderr, "\nption while reading block size: %s", e.what());
+            throw;
+        }
+
         fprintf(stderr, "\nCalling ReadRawBlock 3.5");
 
         if (blk_start != GetParams().MessageStart()) {
