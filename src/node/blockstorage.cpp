@@ -1039,25 +1039,27 @@ bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& 
         unsigned int blk_size;
 
         filein >> blk_start >> blk_size;
+        fprintf(stderr, "\nCalling ReadRawBlock 3.5");
 
         if (blk_start != GetParams().MessageStart()) {
-            fprintf(stderr, "\nCalling ReadRawBlock 3");
+            fprintf(stderr, "\nCalling ReadRawBlock 4");
             LogError("Block magic mismatch for %s: %s versus expected %s while reading raw block",
                 pos.ToString(), HexStr(blk_start), HexStr(GetParams().MessageStart()));
             return false;
         }
 
         if (blk_size > MAX_SIZE) {
-            fprintf(stderr, "\nCalling ReadRawBlock 4");
+            fprintf(stderr, "\nCalling ReadRawBlock 5");
             LogError("Block data is larger than maximum deserialization size for %s: %s versus %s while reading raw block",
                 pos.ToString(), blk_size, MAX_SIZE);
             return false;
         }
 
         block.resize(blk_size); // Zeroing of memory is intentional here
+        fprintf(stderr, "\nCalling ReadRawBlock 5.5");
         filein.read(MakeWritableByteSpan(block));
     } catch (const std::exception& e) {
-        fprintf(stderr, "\nCalling ReadRawBlock 5");
+        fprintf(stderr, "\nCalling ReadRawBlock 6");
         LogError("Read from block file failed: %s for %s while reading raw block", e.what(), pos.ToString());
         return false;
     }
