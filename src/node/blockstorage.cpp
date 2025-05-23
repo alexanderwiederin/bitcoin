@@ -1000,9 +1000,11 @@ bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
     const FlatFilePos block_pos{WITH_LOCK(cs_main, return index.GetBlockPos())};
 
     if (!ReadBlock(block, block_pos)) {
+        fprintf(stderr, "\nCalling ReadBlock 1");
         return false;
     }
     if (block.GetHash() != index.GetBlockHash()) {
+        fprintf(stderr, "\nCalling ReadBlock 2");
         LogError("GetHash() doesn't match index for %s at %s while reading block", index.ToString(), block_pos.ToString());
         return false;
     }
