@@ -3589,11 +3589,12 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             // If a background chainstate is in use, we may need to rebalance our
             // allocation of caches once a chainstate exits initial block download.
             LOCK(::cs_main);
+            fprintf(stderr, "Calling ActiveBestChain 2");
+
             m_chainman.MaybeRebalanceCaches();
         }
 
         if (WITH_LOCK(::cs_main, return m_disabled)) {
-            fprintf(stderr, "Calling ActiveBestChain 2");
             // Background chainstate has reached the snapshot base block, so exit.
 
             // Restart indexes to resume indexing for all blocks unique to the snapshot
@@ -3607,6 +3608,8 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             }
             break;
         }
+        fprintf(stderr, "Calling ActiveBestChain 3");
+
 
         // We check interrupt only after giving ActivateBestChainStep a chance to run once so that we
         // never interrupt before connecting the genesis block during LoadChainTip(). Previously this
@@ -3615,7 +3618,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
         if (m_chainman.m_interrupt) break;
     } while (pindexNewTip != pindexMostWork);
 
-    fprintf(stderr, "Calling ActiveBestChain 3");
+    fprintf(stderr, "Calling ActiveBestChain 4");
 
     m_chainman.CheckBlockIndex();
 
