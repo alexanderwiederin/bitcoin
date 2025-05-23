@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <cstdio>
 #include <node/blockstorage.h>
 
 #include <arith_uint256.h>
@@ -35,6 +36,7 @@
 #include <util/strencodings.h>
 #include <util/translation.h>
 #include <validation.h>
+#include <sys/stat.h>
 
 #include <cstddef>
 #include <map>
@@ -1018,18 +1020,25 @@ bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
 
 bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& pos) const
 {
-    fprintf(stderr, "\nCalling ReadRawBlock 1");
+    fprintf(stderr, "\nReadRawBlock called for pos: %s", pos.ToString().c_str());
+    if (pos.nFile == 0 && pos.nPos == 0) {
+        fprintf(stderr, "\nWarning: Invalid block position (0,0)");
+        return false;
+    }
+
     if (pos.nPos < STORAGE_HEADER_BYTES) {
+        fprintf(stderr, "\nError: Position too small: %u < %u", pos.nPos, STORAGE_HEADER_BYTES);
         // If nPos is less than STORAGE_HEADER_BYTES, we can't read the header that precedes the block data
         // This would cause an unsigned integer underflow when trying to position the file cursor
         // This can happen after pruning or default constructed positions
         LogError("Failed for %s while reading raw block storage header", pos.ToString());
-        fprintf(stderr, "\nCalling ReadRawBlock 2");
         return false;
     }
+
+
+
     AutoFile filein{OpenBlockFile({pos.nFile, pos.nPos - STORAGE_HEADER_BYTES}, /*fReadOnly=*/true)};
     if (filein.IsNull()) {
-        fprintf(stderr, "\nCalling ReadRawBlock 3");
         LogError("OpenBlockFile failed for %s while reading raw block", pos.ToString());
         return false;
     }
@@ -1041,7 +1050,6 @@ bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& 
         fprintf(stderr, "\nCalling ReadRawBlock 3.25");
 
         try {
-
             filein >> blk_start;
             fprintf(stderr, "\nSuccessfully read amgic bytes");
         } catch (const std::exception& e) {
