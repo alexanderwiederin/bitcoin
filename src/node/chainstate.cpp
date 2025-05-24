@@ -37,6 +37,45 @@ static ChainstateLoadResult CompleteChainstateInitialization(
 {
     if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
 
+    // Fast path for blockfiles-only mode
+    if (chainman.IsSkippingUTXODatabase()) {
+        LogPrintf("Using fast-path initialization for blockfiles-only mode\n");
+
+        // LoadBlockINdex will lad m_have_pruned if we've ever remoced a block file from disk
+        if (!chainman.LoadBlockIndex()) {
+            if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
+
+            return {ChainstateLoadStatus::FAILURE, _("Error loading block database")};
+        }
+
+        if (!chainman.BlockIndex().empty() && !chainman.m_blockman.LookupBlockIndex(chainman.GetConsensus().hashGenesisBlock)) {
+            // If the loaded chain has a wrong genesys, bail out immediately
+            return {ChainstateLoadStatus::FAILURE_INCOMPATIBLE_DB, _("Incorrect or no genesis block found. Wrong datadir for network?")};
+        }
+
+        // Set up each chainstate with minimal validation
+        for (Chainstate* chainstate : chainman.GetAll()) {
+            chainstate->InitCoinsDB(1024 * 1024, true, false);
+            chainstate->InitCoinsCache(1024*1024);
+
+            // Find best chain by work
+            CBlockIndex* best_block = nullptr;
+            for (const auto& [_, block_index] : chainman.BlockIndex()) {
+                if (!best_block || CBlockIndexWorkComparator()(best_block, &block_index)) {
+                    best_block = const_cast<CBlockIndex*>(&block_index);
+                }
+            }
+
+            // Set the chain tip directly
+            if (best_block) {
+                chainstate->m_chain.SetTip(*best_block);
+                LogPrintf("Fast path: Setting chain tip to block %s (height %d)\n", best_block->GetBlockHash().ToString(), best_block->nHeight);
+            }
+        }
+
+        return {ChainstateLoadStatus::SUCCESS, {}};
+    }
+
     // LoadBlockIndex will load m_have_pruned if we've ever removed a
     // block file from disk.
     // Note that it also sets m_blockfiles_indexed based on the disk flag!
