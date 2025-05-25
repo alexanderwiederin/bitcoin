@@ -73,8 +73,32 @@ static ChainstateLoadResult CompleteChainstateInitialization(
 
             // Set the chain tip directly
             if (best_block) {
+                // Verify heights are consistent
+                CBlockIndex* pindex = best_block;
+                int expected_height = pindex->nHeight;
+                while (pindex->pprev) {
+                    pindex = pindex->pprev;
+                    expected_height--;
+                    if (pindex->nHeight != expected_height) {
+                        fprintf(stderr, "WARNING: Block height inconsistency detected: block %s has height %d but expected %d\n",
+                                pindex->GetBlockHash().ToString().c_str(), pindex->nHeight, expected_height);
+                        // Fix the height to ensure chain is consistent
+                        pindex->nHeight = expected_height;
+                    }
+                }
+                
+                // Now set the tip and verify the chain's internal length
                 chainstate->m_chain.SetTip(*best_block);
-                LogPrintf("Fast path: Setting chain tip to block %s (height %d)\n", best_block->GetBlockHash().ToString(), best_block->nHeight);
+                fprintf(stderr, "Fast path: Setting chain tip to block %s (height %d)\n", 
+                        best_block->GetBlockHash().ToString().c_str(), best_block->nHeight);
+                fprintf(stderr, "Chain length: %d, Tip height: %d\n", 
+                        chainstate->m_chain.Height(), chainstate->m_chain.Tip()->nHeight);
+                
+                // Check if they match
+                if (chainstate->m_chain.Height() != chainstate->m_chain.Tip()->nHeight) {
+                    fprintf(stderr, "WARNING: Chain height mismatch: m_chain.Height()=%d but tip->nHeight=%d\n",
+                            chainstate->m_chain.Height(), chainstate->m_chain.Tip()->nHeight);
+                }
             }
         }
 
