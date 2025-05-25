@@ -1046,6 +1046,7 @@ bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& 
         filein.read(MakeWritableByteSpan(block));
     } catch (const std::exception& e) {
         LogError("Read from block file failed: %s for %s while reading raw block", e.what(), pos.ToString());
+        fprintf(stderr, "\nRead from block file failed: %s for %s while reading raw block\n", e.what(), pos.ToString().c_str());
         return false;
     }
 
