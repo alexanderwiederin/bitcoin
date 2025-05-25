@@ -61,7 +61,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
             // Find best chain by work
             CBlockIndex* best_block = nullptr;
             for (const auto& [_, block_index] : chainman.BlockIndex()) {
-                if (!best_block || CBlockIndexWorkComparator()(best_block, &block_index)) {
+                if (block_index.IsValid(BLOCK_VALID_TREE) && (!best_block || CBlockIndexWorkComparator()(best_block, &block_index))) {
                     best_block = const_cast<CBlockIndex*>(&block_index);
                 }
             }
