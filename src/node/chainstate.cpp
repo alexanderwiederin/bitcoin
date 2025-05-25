@@ -41,7 +41,12 @@ static ChainstateLoadResult CompleteChainstateInitialization(
     if (chainman.IsSkippingUTXODatabase()) {
         LogPrintf("Using fast-path initialization for blockfiles-only mode\n");
 
-        // LoadBlockINdex will lad m_have_pruned if we've ever remoced a block file from disk
+        // Make sure all chainstates know to skip UTXO
+        for (Chainstate* chainstate : chainman.GetAll()) {
+            chainstate->SetSkipUTXO(true);
+        }
+
+        // LoadBlockIndex will load m_have_pruned if we've ever removed a block file from disk
         if (!chainman.LoadBlockIndex()) {
             if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
 
@@ -49,7 +54,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
         }
 
         if (!chainman.BlockIndex().empty() && !chainman.m_blockman.LookupBlockIndex(chainman.GetConsensus().hashGenesisBlock)) {
-            // If the loaded chain has a wrong genesys, bail out immediately
+            // If the loaded chain has a wrong genesis, bail out immediately
             return {ChainstateLoadStatus::FAILURE_INCOMPATIBLE_DB, _("Incorrect or no genesis block found. Wrong datadir for network?")};
         }
 

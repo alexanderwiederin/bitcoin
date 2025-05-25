@@ -1986,9 +1986,10 @@ void Chainstate::InitCoinsDB(
     fs::path leveldb_name)
 {
     if (m_chainman.IsSkippingUTXODatabase()) {
-        LogPrintf("Initializing blockfiles-only mode with in-memory UTXO database\n");
-        in_memory = true;
-        cache_size_bytes = 1024 * 1024;
+        LogPrintf("Initializing blockfiles-only mode - skipping UTXO database initialization\n");
+        // Don't initialize m_coins_views at all, CoinsTip() will use NullCoinsView
+        m_coins_views = nullptr;
+        return;
     }
 
     if (m_from_snapshot_blockhash) {
@@ -2006,16 +2007,19 @@ void Chainstate::InitCoinsDB(
         m_chainman.m_options.coins_view);
 
     m_coinsdb_cache_size_bytes = cache_size_bytes;
-
-    if (m_chainman.IsSkippingUTXODatabase()) {
-        LogPrintf("Warning: Using in-memory UTXO database on blockfiles-only mode\n");
-        LogPrintf("UTXO operations will work but data won't be persisted\n");
-    }
 }
 
 void Chainstate::InitCoinsCache(size_t cache_size_bytes)
 {
     AssertLockHeld(::cs_main);
+    
+    // In blockfiles-only mode, m_coins_views is null
+    if (m_chainman.IsSkippingUTXODatabase()) {
+        LogPrintf("Skipping InitCoinsCache in blockfiles-only mode\n");
+        m_coinstip_cache_size_bytes = 0;
+        return;
+    }
+    
     assert(m_coins_views != nullptr);
     m_coinstip_cache_size_bytes = cache_size_bytes;
     m_coins_views->InitCache();

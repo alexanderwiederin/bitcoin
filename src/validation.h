@@ -620,6 +620,12 @@ public:
     {
         AssertLockHeld(::cs_main);
 
+        if (!m_coins_views) {
+            static NullCoinsView null_coins_view;
+            static CCoinsViewCache null_cache(&null_coins_view);
+            return null_cache;
+        }
+
         Assert(m_coins_views);
         return *Assert(m_coins_views->m_cacheview);
     }
