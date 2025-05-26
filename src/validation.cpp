@@ -2428,17 +2428,6 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
 bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, CBlockIndex* pindex,
                                CCoinsViewCache& view, bool fJustCheck, bool fSkipUTXOValidation)
 {
-    if (IsSkippingUTXO()) {
-        fprintf(stderr, "Skipping Connect Block");
-        if (!CheckBlock(block, state, m_chainman.GetConsensus())) {
-            return false;
-        }
-
-        pindex->nStatus |= BLOCK_HAVE_DATA;
-
-        return true;
-    }
-
     AssertLockHeld(cs_main);
     assert(pindex);
 

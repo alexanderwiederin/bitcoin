@@ -44,6 +44,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
         if (chainman.m_interrupt) return {ChainstateLoadStatus::INTERRUPTED, {}};
         return {ChainstateLoadStatus::FAILURE, _("Error loading block database")};
     }
+    fprintf(stderr, "CompleteChainstateInitialization 1");
 
     if (!chainman.BlockIndex().empty() &&
             !chainman.m_blockman.LookupBlockIndex(chainman.GetConsensus().hashGenesisBlock)) {
@@ -51,6 +52,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
         // (we're likely using a testnet datadir, or the other way around).
         return {ChainstateLoadStatus::FAILURE_INCOMPATIBLE_DB, _("Incorrect or no genesis block found. Wrong datadir for network?")};
     }
+    fprintf(stderr, "CompleteChainstateInitialization 2");
 
     // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
     // in the past, but is now trying to run unpruned.
@@ -65,6 +67,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
     if (chainman.m_blockman.m_blockfiles_indexed && !chainman.ActiveChainstate().LoadGenesisBlock()) {
         return {ChainstateLoadStatus::FAILURE, _("Error initializing block database")};
     }
+    fprintf(stderr, "CompleteChainstateInitialization 3");
 
     auto is_coinsview_empty = [&](Chainstate* chainstate) EXCLUSIVE_LOCKS_REQUIRED(::cs_main) {
         return options.wipe_chainstate_db || chainstate->CoinsTip().GetBestBlock().IsNull();
@@ -82,9 +85,11 @@ static ChainstateLoadResult CompleteChainstateInitialization(
 
     // At this point we're either in reindex or we've loaded a useful
     // block tree into BlockIndex()!
+    fprintf(stderr, "CompleteChainstateInitialization 4");
 
     for (Chainstate* chainstate : chainman.GetAll()) {
         LogPrintf("Initializing chainstate %s\n", chainstate->ToString());
+        fprintf(stderr, "CompleteChainstateInitialization 5 loop");
 
         try {
             chainstate->InitCoinsDB(
@@ -125,6 +130,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
             assert(chainstate->m_chain.Tip() != nullptr);
         }
     }
+    fprintf(stderr, "CompleteChainstateInitialization 6");
 
     auto chainstates{chainman.GetAll()};
     if (std::any_of(chainstates.begin(), chainstates.end(),
@@ -132,6 +138,7 @@ static ChainstateLoadResult CompleteChainstateInitialization(
         return {ChainstateLoadStatus::FAILURE, strprintf(_("Witness data for blocks after height %d requires validation. Please restart with -reindex."),
                                                          chainman.GetConsensus().SegwitHeight)};
     };
+    fprintf(stderr, "CompleteChainstateInitialization 7");
 
     // Now that chainstates are loaded and we're able to flush to
     // disk, rebalance the coins caches to desired levels based
