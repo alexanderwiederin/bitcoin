@@ -2429,6 +2429,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                                CCoinsViewCache& view, bool fJustCheck, bool fSkipUTXOValidation)
 {
     if (fSkipUTXOValidation) {
+        fprintf(stderr, "Skipping Connect Block");
         if (!CheckBlock(block, state, m_chainman.GetConsensus())) {
             return false;
         }
