@@ -3443,6 +3443,28 @@ static void LimitValidationInterfaceQueue(ValidationSignals& signals) LOCKS_EXCL
 
 bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<const CBlock> pblock)
 {
+    if (IsBlockfilesOnly()) {
+
+        LOCK(cs_main);
+
+        CBlockIndex* pindexMostWork = FindMostWorkChain();
+        if (!pindexMostWork) return false;
+
+        // in Blockfiles mode m_chain.Tip() will be empty
+        // We set it to the tip of the chain with most work
+        // accodring to the blockfiles
+        m_chain.SetTip(*pindexMostWork);
+
+        UpdateTip(pindexMostWork);
+
+        if (kernel::IsInterrupted(m_chainman.GetNotifications().blockTip(SynchronizationState::POST_INIT, *m_chain.Tip()))) {
+            return false;
+        }
+
+
+        return true;
+    }
+
     AssertLockNotHeld(m_chainstate_mutex);
 
     // Note that while we're often called here from ProcessNewBlock, this is
