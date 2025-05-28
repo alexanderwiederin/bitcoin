@@ -3448,6 +3448,51 @@ static void LimitValidationInterfaceQueue(ValidationSignals& signals) LOCKS_EXCL
 
 bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<const CBlock> pblock)
 {
+    if (IsSkippingUTXO()) {
+
+        LOCK(cs_main);
+
+        CBlockIndex* pindexMostWork = FindMostWorkChain();
+        if (!pindexMostWork) return true;
+
+        if (m_chain.Tip() && pindexMostWork->GetAncestor(m_chain.Height()) != m_chain.Tip()) {
+            LogPrintf("Switching to new best chain %s\n", pindexMostWork->GetBlockHash().ToString());
+        }
+
+        CBlockIndex* pindexOldTip = m_chain.Tip();
+
+        if (pindexOldTip && pindexMostWork->GetAncestor(pindexOldTip->nHeight) != pindexOldTip) {
+            const CBlockIndex* pindexFork = m_chain.FindFork(pindexMostWork);
+
+            while (m_chain.Tip() && m_chain.Tip() != pindexFork) {
+                if (m_chain.Tip()->pprev) {
+                    m_chain.SetTip(*m_chain.Tip()->pprev);
+                }
+            }
+
+            std::vector<CBlockIndex*> vpindexToConnect;
+            CBlockIndex* pindexIter = pindexMostWork;
+            while (pindexIter && pindexIter != pindexFork) {
+                vpindexToConnect.push_back(pindexIter);
+                pindexIter = pindexIter->pprev;
+            }
+
+            for (auto it = vpindexToConnect.rbegin(); it != vpindexToConnect.rend(); ++it) {
+                m_chain.SetTip(**it);
+            }
+        } else {
+            if (pindexMostWork != m_chain.Tip()) {
+                m_chain.SetTip(*pindexMostWork);
+            }
+        }
+
+        UpdateTip(pindexMostWork);
+
+        m_chainman.GetNotifications().blockTip(SynchronizationState::POST_INIT, *m_chain.Tip());
+
+        return true;
+    }
+
     AssertLockNotHeld(m_chainstate_mutex);
 
     // Note that while we're often called here from ProcessNewBlock, this is
