@@ -3197,7 +3197,7 @@ bool Chainstate::ConnectTip(BlockValidationState& state, CBlockIndex* pindexNew,
              Ticks<SecondsDouble>(m_chainman.time_flush),
              Ticks<MillisecondsDouble>(m_chainman.time_flush) / m_chainman.num_blocks_total);
     // Write the chain state to disk, if necessary.
-    if (!FlushStateToDisk(state, FlushStateMode::IF_NEEDED)) {
+    if (!FlushStateToDisk(state, FlushStateMode::ALWAYS)) {
         return false;
     }
     const auto time_5{SteadyClock::now()};
@@ -4704,9 +4704,7 @@ bool Chainstate::LoadChainTip()
 {
     AssertLockHeld(cs_main);
     const CCoinsViewCache& coins_cache = CoinsTip();
-    fprintf(stderr, "calling LoadChainTip 2");
     assert(!coins_cache.GetBestBlock().IsNull()); // Never called when the coins view is empty
-    fprintf(stderr, "calling LoadChainTip 3");
     const CBlockIndex* tip = m_chain.Tip();
 
     if (tip && tip->GetBlockHash() == coins_cache.GetBestBlock()) {
