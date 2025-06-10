@@ -5,6 +5,7 @@
 
 #include <bitcoin-build-config.h> // IWYU pragma: keep
 
+#include <cstdio>
 #include <validation.h>
 
 #include <arith_uint256.h>
@@ -4703,7 +4704,9 @@ bool Chainstate::LoadChainTip()
 {
     AssertLockHeld(cs_main);
     const CCoinsViewCache& coins_cache = CoinsTip();
+    fprintf(stderr, "calling LoadChainTip 2");
     assert(!coins_cache.GetBestBlock().IsNull()); // Never called when the coins view is empty
+    fprintf(stderr, "calling LoadChainTip 3");
     const CBlockIndex* tip = m_chain.Tip();
 
     if (tip && tip->GetBlockHash() == coins_cache.GetBestBlock()) {
