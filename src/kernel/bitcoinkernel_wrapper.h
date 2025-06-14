@@ -413,6 +413,11 @@ public:
         kernel_chainstate_manager_options_set_chainstate_db_in_memory(m_options.get(), chainstate_db_in_memory);
     }
 
+   bool SetBlockfilesReadOnly(bool blockfiles_read_only, bool validate_blocks) const noexcept
+   {
+       return kernel_chainstate_manager_options_set_blockfiles_readonly(m_options.get(), blockfiles_read_only, validate_blocks);
+   }
+
     /** Check whether this ChainstateManagerOptions object is valid. */
     explicit operator bool() const noexcept { return bool{m_options}; }
 

@@ -3451,6 +3451,27 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 {
     AssertLockNotHeld(m_chainstate_mutex);
 
+    if (!m_chainman.ShouldValidateBlocks()) {
+        LOCK(cs_main);
+
+        CBlockIndex* pindexMostWork = FindMostWorkChain();
+        if (!pindexMostWork) return false;
+
+        CBlockIndex* pindex = pindexMostWork;
+
+        while (!pindex->IsValid(BLOCK_VALID_SCRIPTS)) {
+            pindex = pindex->pprev;
+        }
+
+        m_chain.SetTip(*pindex);
+
+        if (kernel::IsInterrupted(m_chainman.GetNotifications().blockTip(SynchronizationState::POST_INIT, *pindex, m_chainman.GuessVerificationProgress(pindex)))) {
+            return false;
+        }
+
+        return true;
+    }
+
     // Note that while we're often called here from ProcessNewBlock, this is
     // far from a guarantee. Things in the P2P/RPC will often end up calling
     // us in the middle of ProcessNewBlock - do not assume pblock is set
