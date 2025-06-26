@@ -59,6 +59,9 @@ private:
     fs::path m_block_files_file_path;
     fs::path m_reindex_flag_file_path;
     fs::path m_prune_flag_file_path;
+    fs::path m_path;
+    bool m_read_only;
+    bool m_directory_locked;
 
     const CChainParams m_params;
 
@@ -74,8 +77,11 @@ private:
 
     [[nodiscard]] bool ApplyLog() const EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
 
+    [[nodiscard]] bool ValidateLog() const EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
 public:
-    BlockTreeStore(const fs::path& file_path, const CChainParams& params, bool wipe_data = false);
+    BlockTreeStore(const fs::path& file_path, const CChainParams& params, bool wipe_data = false, bool read_only = false);
+    ~BlockTreeStore();
 
     void ReadReindexing(bool& reindexing) const EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);
     void WriteReindexing(bool reindexing) const EXCLUSIVE_LOCKS_REQUIRED(!m_mutex);

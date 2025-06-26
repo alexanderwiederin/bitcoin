@@ -253,6 +253,8 @@ private:
 
     std::unique_ptr<kernel::BlockTreeStore> CreateAndMigrateBlockTree();
 
+    std::unique_ptr<kernel::BlockTreeStore> CreateReadOnlyBlockTree();
+
     const kernel::BlockManagerOpts m_opts;
 
     const FlatFileSeq m_block_file_seq;

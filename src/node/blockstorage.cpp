@@ -1132,6 +1132,11 @@ static auto InitBlocksdirXorKey(const BlockManager::Options& opts)
 std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateAndMigrateBlockTree()
 {
     LOCK(::cs_main);
+
+    if (m_opts.read_only) {
+        return CreateReadOnlyBlockTree();
+    }
+
     if (!fs::exists(m_opts.block_tree_dir / "CURRENT")) {
         return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, m_opts.wipe_block_tree_data);
     }
@@ -1203,6 +1208,17 @@ std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateAndMigrateBlockTree(
     return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, m_opts.wipe_block_tree_data);
 }
 
+std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateReadOnlyBlockTree()
+{
+    if (fs::exists(m_opts.block_tree_dir / "headers.dat") &&
+        fs::exists(m_opts.block_tree_dir / "blockfiles.dat")) {
+        return std::make_unique<kernel::BlockTreeStore>(
+            m_opts.block_tree_dir, m_opts.chainparams, false, true);
+    }
+
+    throw std::runtime_error("Cannot open in read-only mode: required fiels not found");
+}
+
 BlockManager::BlockManager(const util::SignalInterrupt& interrupt, Options opts)
     : m_prune_mode{opts.prune_target > 0},
       m_xor_key{InitBlocksdirXorKey(opts)},
@@ -1213,12 +1229,13 @@ BlockManager::BlockManager(const util::SignalInterrupt& interrupt, Options opts)
 {
     m_block_tree_db = CreateAndMigrateBlockTree();
 
-    if (m_opts.wipe_block_tree_data) {
-        m_block_tree_db->WriteReindexing(true);
-        m_blockfiles_indexed = false;
-        // If we're reindexing in prune mode, wipe away unusable block files and all undo data files
-        if (m_prune_mode) {
-            CleanupBlockRevFiles();
+    if (!m_opts.read_only) {
+        if (m_opts.wipe_block_tree_data) {
+            m_block_tree_db->WriteReindexing(true);
+            m_blockfiles_indexed = false;
+            if (m_prune_mode) {
+                CleanupBlockRevFiles();
+            }
         }
     }
 }

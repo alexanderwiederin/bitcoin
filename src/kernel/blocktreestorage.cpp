@@ -105,33 +105,84 @@ void BlockTreeStore::CheckMagicAndVersion() const
     }
 }
 
-BlockTreeStore::BlockTreeStore(const fs::path& path, const CChainParams& params, bool wipe_data)
+BlockTreeStore::BlockTreeStore(const fs::path& path, const CChainParams& params, bool wipe_data, bool read_only)
     : m_header_file_path{path / HEADER_FILE_NAME},
       m_log_file_path{path / LOG_FILE_NAME},
       m_block_files_file_path{path / BLOCK_FILES_FILE_NAME},
       m_reindex_flag_file_path{path / REINDEX_FLAG_FILE_NAME},
       m_prune_flag_file_path{path / PRUNE_FLAG_FILE_NAME},
+      m_path{path},
+      m_read_only{read_only},
       m_params{params}
 {
     assert(GetSerializeSize(DiskBlockIndexWrapper{}) == DISK_BLOCK_INDEX_WRAPPER_SIZE);
     assert(GetSerializeSize(BlockFileInfoWrapper{}) == BLOCK_FILE_INFO_WRAPPER_SIZE);
-    fs::create_directories(path);
-    if (wipe_data) {
-        fs::remove(m_header_file_path);
-        fs::remove(m_block_files_file_path);
+
+    if (read_only) {
+        auto lock_result = util::LockDirectory(path, ".blocktreelock", true);
+        if (lock_result != util::LockResult::Success) {
+            LogPrintf("BlockTreeStore: Directory %s is locked by another instance (result: %s). "
+                      "Proceeding in read-only mode - data may be temporarily inconsistent during writes.\n",
+                      fs::PathToString(path),
+                      lock_result == util::LockResult::ErrorLock ? "ErrorLock" : "ErrorWrite");
+        }
+        m_directory_locked = false;
+    } else {
+        fs::create_directories(path);
+        if (wipe_data) {
+            fs::remove(m_header_file_path);
+            fs::remove(m_block_files_file_path);
+        }
+
+        auto lock_result = util::LockDirectory(path, ".blocktreelock", false);
+        if (lock_result != util::LockResult::Success) {
+            std::string error_msg;
+            switch (lock_result) {
+            case util::LockResult::ErrorLock:
+                error_msg = "Another instance is using it";
+                break;
+            case util::LockResult::ErrorWrite:
+                error_msg = "Cannot create lock file (check permissions)";
+                break;
+            default:
+                error_msg = "Unknown error";
+                break;
+            }
+            throw BlockTreeStoreError(strprintf("Cannot obtain lock: %s", error_msg));
+        }
+        m_directory_locked = true;
     }
+
     bool header_file_exists{fs::exists(m_header_file_path)};
     bool block_files_file_exists{fs::exists(m_block_files_file_path)};
     if (header_file_exists ^ block_files_file_exists) {
         throw BlockTreeStoreError("Block tree store is in an inconsistent state");
     }
     if (!header_file_exists && !block_files_file_exists) {
+        if (read_only) {
+            throw BlockTreeStoreError("Cannot initialize read-only block tree store: required files do not exist");
+        }
         CreateHeaderFile();
         CreateBlockFilesFile();
     }
+
     CheckMagicAndVersion();
-    LOCK(m_mutex);
-    (void)ApplyLog(); // Ignore an incomplete log file here, the integrity of the data is still intact.
+
+    if (!read_only) {
+        LOCK(m_mutex);
+        (void)ApplyLog();
+    } else if (fs::exists(m_log_file_path)) {
+        LOCK(m_mutex);
+        (void)ValidateLog();
+    }
+}
+
+BlockTreeStore::~BlockTreeStore()
+{
+    if (m_directory_locked) {
+        UnlockDirectory(m_path, ".blocktreelock");
+        LogPrintf("BlockTreeStore: Released lock on %s\n", fs::PathToString(m_path));
+    }
 }
 
 void BlockTreeStore::CreateHeaderFile() const
@@ -177,6 +228,10 @@ void BlockTreeStore::ReadReindexing(bool& reindexing) const
 
 void BlockTreeStore::WriteReindexing(bool reindexing) const
 {
+    if (m_read_only) {
+        throw BlockTreeStoreError("Cannot write reindexing flag in read-only mode");
+    }
+
     LOCK(m_mutex);
     if (reindexing) {
         std::ofstream{m_reindex_flag_file_path}.close();
@@ -236,6 +291,10 @@ void BlockTreeStore::ReadPruned(bool& pruned) const
 
 void BlockTreeStore::WritePruned(bool pruned) const
 {
+    if (m_read_only) {
+        throw BlockTreeStoreError("Cannot write pruned flag in read-only mode");
+    }
+
     LOCK(m_mutex);
     if (pruned) {
         std::ofstream{m_prune_flag_file_path}.close();
@@ -415,8 +474,73 @@ bool BlockTreeStore::ApplyLog() const
     return true;
 }
 
+bool BlockTreeStore::ValidateLog() const
+{
+    AssertLockHeld(m_mutex);
+
+    if (!fs::exists(m_log_file_path)) {
+        return false;
+    }
+
+    auto log_file{AutoFile{fsbridge::fopen(m_log_file_path, "rb")}};
+    if (log_file.IsNull()) {
+        return false;
+    }
+
+    uint32_t re_rolling_checksum = 0;
+    uint32_t number_of_types;
+    log_file >> number_of_types;
+
+    for (uint32_t i = 0; i < number_of_types; i++) {
+        uint32_t value_type;
+        log_file >> value_type;
+
+        uint32_t type_size;
+        log_file >> type_size;
+        u_int64_t num_iterations;
+        log_file >> num_iterations;
+        uint32_t entry_size = type_size + FILE_POSITION_SIZE;
+
+        DataStream stream;
+        stream.resize(entry_size);
+
+        for (uint32_t j = 0; j < num_iterations; j++) {
+            log_file.read(std::span<std::byte>(stream));
+            stream.ignore(type_size);
+            int64_t pos;
+            stream >> pos;
+
+            uint32_t re_checksum = crc32c::Crc32c(UCharCast(stream.data()), entry_size);
+            re_rolling_checksum = crc32c::Extend(re_rolling_checksum, UCharCast(stream.data()), entry_size);
+            uint32_t checksum;
+            log_file >> checksum;
+
+            if (checksum != re_checksum) {
+                LogDebug(BCLog::BLOCKSTORAGE, "Invalid log entry in read-only mode");
+                return false;
+            }
+
+            stream.Rewind();
+            stream.resize(entry_size);
+        }
+    }
+
+    uint32_t rolling_checksum;
+    log_file >> rolling_checksum;
+    if (rolling_checksum != re_rolling_checksum) {
+        LogDebug(BCLog::BLOCKSTORAGE, "Incomplete log file in read-only mode");
+        return false;
+    }
+
+    return true;
+}
+
 bool BlockTreeStore::WriteBatchSync(const std::vector<std::pair<int, CBlockFileInfo*>>& fileInfo, int32_t last_file, const std::vector<CBlockIndex*>& blockinfo)
 {
+    if (m_read_only) {
+        throw BlockTreeStoreError("Cannot perform batch write operations in read-only mode");
+    }
+
     AssertLockHeld(::cs_main);
     LOCK(m_mutex);
 
