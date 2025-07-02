@@ -124,6 +124,26 @@ typedef struct kernel_ScriptPubkey kernel_ScriptPubkey;
 typedef struct kernel_TransactionOutput kernel_TransactionOutput;
 
 /**
+ * Opaque data structure for holding a transaction input.
+ */
+typedef struct kernel_TransactionInput kernel_TransactionInput;
+
+/**
+ * Opaque data structure for holding a transaction outpoint.
+ */
+typedef struct kernel_TransactionOutPoint kernel_TransactionOutPoint;
+
+/**
+ * Opaque data structure for holding a script signature.
+ */
+typedef struct kernel_TransactionScriptSig kernel_TransactionScriptSig;
+
+/**
+ * Opaque data structure for holding a witness.
+ */
+typedef struct kernel_TransactionWitness kernel_TransactionWitness;
+
+/**
  * Opaque data structure for holding a logging connection.
  *
  * The logging connection can be used to manually stop logging.

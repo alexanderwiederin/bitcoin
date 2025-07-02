@@ -4,6 +4,8 @@
 
 include(GNUInstallDirs)
 
+option(BUILD_BLOCKREADER "Build Blockreader functionality in kernel library" ON)
+
 # TODO: libbitcoinkernel is a work in progress consensus engine
 #       library, as more and more modules are decoupled from the
 #       consensus engine, this list will shrink to only those
@@ -19,6 +21,8 @@ add_library(bitcoinkernel
   cs_main.cpp
   disconnected_transactions.cpp
   mempool_removal_reason.cpp
+  $<$<BOOL:${BUILD_BLOCKREADER}>:blockreader/reader_impl.cpp>
+  $<$<BOOL:${BUILD_BLOCKREADER}>:blockreader/blockreader.cpp>
   ../arith_uint256.cpp
   ../chain.cpp
   ../coins.cpp
@@ -81,6 +85,19 @@ add_library(bitcoinkernel
   ../validationinterface.cpp
   ../versionbits.cpp
 )
+
+if(BUILD_BLOCKREADER)
+  target_include_directories(bitcoinkernel
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/blockreader
+  )
+
+  target_compile_definitions(bitcoinkernel
+    PUBLIC
+    ENABLE_BLOCKREADER
+  )
+endif()
+
 target_link_libraries(bitcoinkernel
   PRIVATE
     core_interface
@@ -152,3 +169,9 @@ install(TARGETS bitcoinkernel
 )
 
 install(FILES bitcoinkernel.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT libbitcoinkernel)
+
+if(BUILD_BLOCKREADER)
+  install(FILES blockreader/blockreader.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/kernel/blockreader
+    COMPONENT libbitcoinkernel)
+endif()

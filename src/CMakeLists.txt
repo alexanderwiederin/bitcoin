@@ -475,7 +475,6 @@ if(BUILD_UTIL_CHAINSTATE)
   )
 endif()
 
-
 add_subdirectory(test/util)
 if(BUILD_BENCH)
   add_subdirectory(bench)
