@@ -8,12 +8,38 @@
 #define BOOST_TEST_MODULE Bitcoin Kernel Test Suite
 #include <boost/test/included/unit_test.hpp>
 
+#include <test/kernel/block_data.h>
+
 #include <charconv>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <random>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
+
+std::string random_string(uint32_t length)
+{
+    const std::string chars = "0123456789"
+                              "abcdefghijklmnopqrstuvwxyz"
+                              "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    static std::random_device rd;
+    static std::default_random_engine dre{rd()};
+    static std::uniform_int_distribution<> distribution(0, chars.size() - 1);
+
+    std::string random;
+    random.reserve(length);
+    for (uint32_t i = 0; i < length; i++) {
+        random += chars[distribution(dre)];
+    }
+    return random;
+}
 
 std::vector<unsigned char> hex_string_to_char_vec(std::string_view hex)
 {
@@ -29,6 +55,130 @@ std::vector<unsigned char> hex_string_to_char_vec(std::string_view hex)
     }
     return bytes;
 }
+
+template<typename T, typename V>
+void check_equal(const T& actual, const V& expected) {
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        actual.begin(), actual.end(),
+        expected.begin(), expected.end()
+    );
+}
+
+class TestLog
+{
+public:
+    void LogMessage(std::string_view message)
+    {
+        std::cout << "kernel: " << message;
+    }
+};
+
+struct TestDirectory {
+    std::filesystem::path m_directory;
+    TestDirectory(std::string directory_name)
+        : m_directory{std::filesystem::temp_directory_path() / (directory_name + random_string(16))}
+    {
+        std::filesystem::create_directories(m_directory);
+    }
+
+    ~TestDirectory()
+    {
+        std::filesystem::remove_all(m_directory);
+    }
+};
+
+class TestKernelNotifications : public KernelNotifications<TestKernelNotifications>
+{
+public:
+    void HeaderTipHandler(kernel_SynchronizationState state, int64_t height, int64_t timestamp, bool presync) override
+    {
+        BOOST_CHECK_GT(timestamp, 0);
+    }
+
+    void WarningSetHandler(kernel_Warning warning, std::string_view message) override
+    {
+        std::cout << "Kernel warning is set: " << message << std::endl;
+    }
+
+    void WarningUnsetHandler(kernel_Warning warning) override
+    {
+        std::cout << "Kernel warning was unset." << std::endl;
+    }
+
+    void FlushErrorHandler(std::string_view error) override
+    {
+        std::cout << error << std::endl;
+    }
+
+    void FatalErrorHandler(std::string_view error) override
+    {
+        std::cout << error << std::endl;
+    }
+};
+
+class TestValidationInterface : public ValidationInterface<TestValidationInterface>
+{
+public:
+    TestValidationInterface() : ValidationInterface() {}
+
+    std::optional<std::vector<unsigned char>> m_expected_valid_block = std::nullopt;
+
+    void BlockChecked(const UnownedBlock block, const BlockValidationState state) override
+    {
+        {
+            auto serialized_block{block.GetBlockData()};
+            if (m_expected_valid_block.has_value()) {
+                check_equal(m_expected_valid_block.value(),serialized_block);
+            }
+        }
+
+        auto mode{state.ValidationMode()};
+        switch (mode) {
+        case kernel_ValidationMode::kernel_VALIDATION_STATE_VALID: {
+            std::cout << "Valid block" << std::endl;
+            return;
+        }
+        case kernel_ValidationMode::kernel_VALIDATION_STATE_INVALID: {
+            std::cout << "Invalid block: ";
+            auto result{state.BlockValidationResult()};
+            switch (result) {
+            case kernel_BlockValidationResult::kernel_BLOCK_RESULT_UNSET:
+                std::cout << "initial value. Block has not yet been rejected" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_HEADER_LOW_WORK:
+                std::cout << "the block header may be on a too-little-work chain" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_CONSENSUS:
+                std::cout << "invalid by consensus rules (excluding any below reasons)" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_CACHED_INVALID:
+                std::cout << "this block was cached as being invalid and we didn't store the reason why" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_INVALID_HEADER:
+                std::cout << "invalid proof of work or time too old" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_MUTATED:
+                std::cout << "the block's data didn't match the data committed to by the PoW" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_MISSING_PREV:
+                std::cout << "We don't have the previous block the checked one is built on" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_INVALID_PREV:
+                std::cout << "A block this one builds on is invalid" << std::endl;
+                break;
+            case kernel_BlockValidationResult::kernel_BLOCK_TIME_FUTURE:
+                std::cout << "block timestamp was > 2 hours in the future (or our clock is bad)" << std::endl;
+                break;
+            }
+            return;
+        }
+        case kernel_ValidationMode::kernel_VALIDATION_STATE_ERROR: {
+            std::cout << "Internal error" << std::endl;
+            return;
+        }
+        }
+    }
+};
 
 constexpr auto VERIFY_ALL_PRE_SEGWIT{kernel_SCRIPT_FLAGS_VERIFY_P2SH | kernel_SCRIPT_FLAGS_VERIFY_DERSIG |
                                      kernel_SCRIPT_FLAGS_VERIFY_NULLDUMMY | kernel_SCRIPT_FLAGS_VERIFY_CHECKLOCKTIMEVERIFY |
@@ -153,4 +303,341 @@ BOOST_AUTO_TEST_CASE(kernel_script_verify_tests)
         /*amount*/ 88480,
         /*input_index*/ 0,
         /*is_taproot*/ true);
+}
+
+BOOST_AUTO_TEST_CASE(kernel_logging_tests)
+{
+    kernel_LoggingOptions logging_options = {
+        .log_timestamps = true,
+        .log_time_micros = true,
+        .log_threadnames = false,
+        .log_sourcelocations = false,
+        .always_print_category_levels = true,
+    };
+
+    kernel_logging_set_level_category(kernel_LogCategory::kernel_LOG_BENCH, kernel_LogLevel::kernel_LOG_TRACE);
+    kernel_logging_disable_category(kernel_LogCategory::kernel_LOG_BENCH);
+    kernel_logging_enable_category(kernel_LogCategory::kernel_LOG_VALIDATION);
+    kernel_logging_disable_category(kernel_LogCategory::kernel_LOG_VALIDATION);
+
+    // Check that connecting, connecting another, and then disconnecting and connecting a logger again works.
+    {
+        kernel_logging_set_level_category(kernel_LogCategory::kernel_LOG_KERNEL, kernel_LogLevel::kernel_LOG_TRACE);
+        kernel_logging_enable_category(kernel_LogCategory::kernel_LOG_KERNEL);
+        Logger logger{std::make_unique<TestLog>(TestLog{}), logging_options};
+        BOOST_CHECK(logger);
+        Logger logger_2{std::make_unique<TestLog>(TestLog{}), logging_options};
+        BOOST_CHECK(logger_2);
+    }
+    Logger logger{std::make_unique<TestLog>(TestLog{}), logging_options};
+    BOOST_CHECK(logger);
+}
+
+BOOST_AUTO_TEST_CASE(kernel_context_tests)
+{
+    { // test default context
+        Context context{};
+        BOOST_CHECK(context);
+    }
+
+    { // test with context options, but not options set
+        ContextOptions options{};
+        Context context{options};
+        BOOST_CHECK(context);
+    }
+
+    { // test with context options
+        TestKernelNotifications notifications{};
+        ContextOptions options{};
+        ChainParams params{kernel_ChainType::kernel_CHAIN_TYPE_MAINNET};
+        options.SetChainParams(params);
+        options.SetNotifications(notifications);
+        Context context{options};
+        BOOST_CHECK(context);
+    }
+}
+
+Context create_context(TestKernelNotifications& notifications, kernel_ChainType chain_type, TestValidationInterface* validation_interface = nullptr)
+{
+    ContextOptions options{};
+    ChainParams params{chain_type};
+    options.SetChainParams(params);
+    options.SetNotifications(notifications);
+    if (validation_interface) {
+        options.SetValidationInterface(*validation_interface);
+    }
+    auto context{Context{options}};
+    BOOST_REQUIRE(context);
+    return context;
+}
+
+BOOST_AUTO_TEST_CASE(kernel_chainman_tests)
+{
+    kernel_LoggingOptions logging_options = {
+        .log_timestamps = true,
+        .log_time_micros = true,
+        .log_threadnames = false,
+        .log_sourcelocations = false,
+        .always_print_category_levels = true,
+    };
+    Logger logger{std::make_unique<TestLog>(TestLog{}), logging_options};
+    auto test_directory{TestDirectory{"chainman_test_bitcoin_kernel"}};
+
+    { // test with default context
+        Context context{};
+        BOOST_REQUIRE(context);
+        ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+        BOOST_REQUIRE(chainman_opts);
+        ChainMan chainman{context, chainman_opts};
+        BOOST_REQUIRE(chainman);
+    }
+
+    { // test with default context options
+        ContextOptions options{};
+        Context context{options};
+        BOOST_REQUIRE(context);
+        ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+        BOOST_REQUIRE(chainman_opts);
+        ChainMan chainman{context, chainman_opts};
+        BOOST_REQUIRE(chainman);
+    }
+
+    TestKernelNotifications notifications{};
+    auto context{create_context(notifications, kernel_ChainType::kernel_CHAIN_TYPE_MAINNET)};
+
+    ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+    BOOST_REQUIRE(chainman_opts);
+    chainman_opts.SetWorkerThreads(4);
+    BOOST_CHECK(chainman_opts.SetWipeDbs(/*wipe_block_tree=*/false, /*wipe_chainstate=*/false));
+    BOOST_CHECK(!chainman_opts.SetWipeDbs(/*wipe_block_tree=*/true, /*wipe_chainstate=*/false));
+    ChainMan chainman{context, chainman_opts};
+    BOOST_REQUIRE(chainman);
+}
+
+std::unique_ptr<ChainMan> create_chainman(TestDirectory& test_directory,
+                                          bool reindex,
+                                          bool wipe_chainstate,
+                                          bool chainstate_db_in_memory,
+                                          Context& context)
+{
+    auto mainnet_test_directory{TestDirectory{"mainnet_test_bitcoin_kernel"}};
+
+    ChainstateManagerOptions chainman_opts{context, test_directory.m_directory.string(), (test_directory.m_directory / "blocks").string()};
+    BOOST_REQUIRE(chainman_opts);
+
+    if (reindex) {
+        chainman_opts.SetWipeDbs(/*wipe_block_tree=*/reindex, /*wipe_chainstate=*/reindex);
+    }
+    if (wipe_chainstate) {
+        chainman_opts.SetWipeDbs(/*wipe_block_tree=*/false, /*wipe_chainstate=*/wipe_chainstate);
+    }
+    if (chainstate_db_in_memory) {
+        chainman_opts.SetChainstateDbInMemory(chainstate_db_in_memory);
+    }
+
+    auto chainman{std::make_unique<ChainMan>(context, chainman_opts)};
+    BOOST_REQUIRE(chainman);
+    return chainman;
+}
+
+void chainman_reindex_test(TestDirectory& test_directory)
+{
+    TestKernelNotifications notifications{};
+    auto context{create_context(notifications, kernel_ChainType::kernel_CHAIN_TYPE_MAINNET)};
+    auto chainman{create_chainman(test_directory, true, false, false, context)};
+
+    std::vector<std::string> import_files;
+    BOOST_CHECK(chainman->ImportBlocks(import_files));
+
+    // Sanity check some block retrievals
+    auto genesis_index{chainman->GetBlockIndexFromGenesis()};
+    auto genesis_block_raw{chainman->ReadBlock(genesis_index).value().GetBlockData()};
+    auto first_index{chainman->GetBlockIndexByHeight(0).value()};
+    auto first_block_raw{chainman->ReadBlock(genesis_index).value().GetBlockData()};
+    check_equal(genesis_block_raw, first_block_raw);
+    auto height{first_index.GetHeight()};
+    BOOST_CHECK_EQUAL(height, 0);
+
+    auto next_index{chainman->GetNextBlockIndex(first_index).value()};
+    auto next_block_data{chainman->ReadBlock(next_index).value().GetBlockData()};
+    auto tip_index{chainman->GetBlockIndexFromTip()};
+    auto tip_block_data{chainman->ReadBlock(tip_index).value().GetBlockData()};
+    auto second_index{chainman->GetBlockIndexByHeight(1).value()};
+    auto second_block{chainman->ReadBlock(second_index).value()};
+    auto second_block_data{second_block.GetBlockData()};
+    auto second_height{second_index.GetHeight()};
+    BOOST_CHECK_EQUAL(second_height, 1);
+    check_equal(next_block_data, tip_block_data);
+    check_equal(next_block_data, second_block_data);
+
+    auto hash{second_index.GetHash()};
+    auto another_second_index{chainman->GetBlockIndexByHash(hash.get())};
+    auto another_second_height{another_second_index.GetHeight()};
+    auto block_hash{second_block.GetHash()};
+    BOOST_CHECK(std::equal(std::begin(block_hash->hash), std::end(block_hash->hash), std::begin(hash->hash)));
+    BOOST_CHECK_EQUAL(second_height, another_second_height);
+}
+
+void chainman_reindex_chainstate_test(TestDirectory& test_directory)
+{
+    TestKernelNotifications notifications{};
+    auto context{create_context(notifications, kernel_ChainType::kernel_CHAIN_TYPE_MAINNET)};
+    auto chainman{create_chainman(test_directory, false, true, false, context)};
+
+    std::vector<std::string> import_files;
+    import_files.push_back((test_directory.m_directory / "blocks" / "blk00000.dat").string());
+    BOOST_CHECK(chainman->ImportBlocks(import_files));
+}
+
+void chainman_mainnet_validation_test(TestDirectory& test_directory)
+{
+    TestKernelNotifications notifications{};
+    TestValidationInterface validation_interface{};
+
+    auto context{create_context(notifications, kernel_ChainType::kernel_CHAIN_TYPE_MAINNET, &validation_interface)};
+
+    auto chainman{create_chainman(test_directory, false, false, false, context)};
+
+    {
+        // Process an invalid block
+        auto raw_block = hex_string_to_char_vec("012300");
+        Block block{raw_block};
+        BOOST_CHECK(!block);
+    }
+    {
+        // Process an empty block
+        auto raw_block = hex_string_to_char_vec("");
+        Block block{raw_block};
+        BOOST_CHECK(!block);
+    }
+
+    // mainnet block 1
+    auto raw_block = hex_string_to_char_vec("010000006fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000982051fd1e4ba744bbbe680e1fee14677ba1a3c3540bf7b1cdb606e857233e0e61bc6649ffff001d01e362990101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d0104ffffffff0100f2052a0100000043410496b538e853519c726a2c91e61ec11600ae1390813a627c66fb8be7947be63c52da7589379515d4e0a604f8141781e62294721166bf621e73a82cbf2342c858eeac00000000");
+    Block block{raw_block};
+    BOOST_REQUIRE(block);
+
+    validation_interface.m_expected_valid_block.emplace(raw_block);
+    check_equal(block.GetBlockData(), raw_block);
+    bool new_block = false;
+    BOOST_CHECK(chainman->ProcessBlock(block, &new_block));
+    BOOST_CHECK(new_block);
+
+    auto tip{chainman->GetBlockIndexFromTip()};
+    auto read_block{chainman->ReadBlock(tip)};
+    BOOST_REQUIRE(read_block);
+    check_equal(read_block.value().GetBlockData(), raw_block);
+
+    // Check that we can read the previous block
+    auto tip_2{tip.GetPreviousBlockIndex()};
+    auto read_block_2{chainman->ReadBlock(tip_2.value())};
+
+    // It should be an error if we go another block back, since the genesis has no ancestor
+    BOOST_CHECK(!tip_2.value().GetPreviousBlockIndex());
+
+    // If we try to validate it again, it should be a duplicate
+    BOOST_CHECK(chainman->ProcessBlock(block, &new_block));
+    BOOST_CHECK(!new_block);
+}
+
+BOOST_AUTO_TEST_CASE(kernel_chainman_mainnet_tests)
+{
+    kernel_LoggingOptions logging_options = {
+        .log_timestamps = true,
+        .log_time_micros = true,
+        .log_threadnames = false,
+        .log_sourcelocations = false,
+        .always_print_category_levels = true,
+    };
+    Logger logger{std::make_unique<TestLog>(TestLog{}), logging_options};
+
+    auto test_directory{TestDirectory{"mainnet_test_bitcoin_kernel"}};
+    chainman_mainnet_validation_test(test_directory);
+    chainman_reindex_test(test_directory);
+    chainman_reindex_chainstate_test(test_directory);
+}
+
+BOOST_AUTO_TEST_CASE(kernel_chainman_in_memory_tests)
+{
+    auto in_memory_test_directory{TestDirectory{"in-memory_test_bitcoin_kernel"}};
+
+    TestKernelNotifications notifications{};
+    auto context{create_context(notifications, kernel_ChainType::kernel_CHAIN_TYPE_REGTEST)};
+    auto chainman{create_chainman(in_memory_test_directory, false, false, true, context)};
+
+    for (auto& raw_block : REGTEST_BLOCK_DATA) {
+        Block block{raw_block};
+        BOOST_REQUIRE(block);
+        bool new_block{false};
+        chainman->ProcessBlock(block, &new_block);
+        BOOST_CHECK(new_block);
+    }
+
+    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "blocks" / "index"));
+    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "chainstate"));
+}
+
+BOOST_AUTO_TEST_CASE(kernel_chainman_regtest_tests)
+{
+    auto test_directory{TestDirectory{"regtest_test_bitcoin_kernel"}};
+
+    TestKernelNotifications notifications{};
+    auto context{create_context(notifications, kernel_ChainType::kernel_CHAIN_TYPE_REGTEST)};
+
+    // Validate 206 regtest blocks in total.
+    // Stop halfway to check that it is possible to continue validating starting
+    // from prior state.
+    const size_t mid{REGTEST_BLOCK_DATA.size() / 2};
+
+    {
+        auto chainman{create_chainman(test_directory, false, false, false, context)};
+        for (size_t i{0}; i < mid; i++) {
+            Block block{REGTEST_BLOCK_DATA[i]};
+            BOOST_REQUIRE(block);
+            bool new_block{false};
+            BOOST_CHECK(chainman->ProcessBlock(block, &new_block));
+            BOOST_CHECK(new_block);
+        }
+    }
+
+    auto chainman{create_chainman(test_directory, false, false, false, context)};
+
+    for (size_t i{mid}; i < REGTEST_BLOCK_DATA.size(); i++) {
+        Block block{REGTEST_BLOCK_DATA[i]};
+        BOOST_REQUIRE(block);
+        bool new_block{false};
+        BOOST_CHECK(chainman->ProcessBlock(block, &new_block));
+        BOOST_CHECK(new_block);
+    }
+
+    auto tip = chainman->GetBlockIndexFromTip();
+    auto read_block = chainman->ReadBlock(tip).value();
+    check_equal(read_block.GetBlockData(), REGTEST_BLOCK_DATA[REGTEST_BLOCK_DATA.size() - 1]);
+
+    auto tip_2 = tip.GetPreviousBlockIndex().value();
+    auto read_block_2 = chainman->ReadBlock(tip_2).value();
+    check_equal(read_block_2.GetBlockData(), REGTEST_BLOCK_DATA[REGTEST_BLOCK_DATA.size() - 2]);
+
+    auto block_undo{chainman->ReadBlockUndo(tip)};
+    BOOST_REQUIRE(block_undo);
+    BOOST_CHECK_EQUAL(block_undo->GetTxOutSize(block_undo->m_size), 0);
+    auto tx_undo_size = block_undo->GetTxOutSize(block_undo->m_size - 1);
+    auto output = block_undo->GetTxUndoPrevoutByIndex(block_undo->m_size - 1, tx_undo_size - 1);
+    uint32_t output_height = block_undo->GetTxUndoPrevoutHeight(block_undo->m_size - 1, tx_undo_size - 1);
+    BOOST_CHECK_EQUAL(output_height, 205);
+    BOOST_REQUIRE(output);
+    BOOST_CHECK_EQUAL(output.GetOutputAmount(), 100000000);
+    auto script_pubkey = output.GetScriptPubkey();
+    BOOST_REQUIRE(script_pubkey);
+    BOOST_CHECK_EQUAL(script_pubkey.GetScriptPubkeyData().size(), 22);
+
+    // Test that reading past the size returns null data
+    output = block_undo->GetTxUndoPrevoutByIndex(block_undo->m_size, tx_undo_size);
+    BOOST_CHECK(!output);
+    output_height = block_undo->GetTxUndoPrevoutHeight(block_undo->m_size, tx_undo_size);
+    BOOST_CHECK_EQUAL(output_height, 0);
+
+    std::filesystem::remove_all(test_directory.m_directory / "blocks" / "blk00000.dat");
+    BOOST_CHECK(!chainman->ReadBlock(tip_2).has_value());
+    std::filesystem::remove_all(test_directory.m_directory / "blocks" / "rev00000.dat");
+    BOOST_CHECK(!chainman->ReadBlockUndo(tip).has_value());
 }
