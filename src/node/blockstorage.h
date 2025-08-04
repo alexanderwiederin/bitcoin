@@ -252,6 +252,7 @@ private:
     BlockfileType BlockfileTypeForHeight(int height);
 
     std::unique_ptr<kernel::BlockTreeStore> CreateAndMigrateBlockTree();
+    std::unique_ptr<kernel::BlockTreeStore> CreateReadOnlyBlockTree();
 
     const kernel::BlockManagerOpts m_opts;
 
