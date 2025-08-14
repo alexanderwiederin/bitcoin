@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "util/transaction_identifier.h"
 #define BITCOINKERNEL_BUILD
 
 #include <kernel/bitcoinkernel.h>
@@ -389,6 +390,11 @@ struct btck_TransactionSpentOutputs
 struct btck_Coin
 {
     const Coin* m_coin;
+    bool m_owned;
+};
+
+struct btck_OutPoint {
+    const COutPoint* m_out_point;
     bool m_owned;
 };
 
@@ -1171,4 +1177,35 @@ bool btck_chainstate_manager_process_block(
     bool* new_block)
 {
     return chainman->m_chainman->ProcessNewBlock(block->m_block, /*force_processing=*/true, /*min_pow_checked=*/true, /*new_block=*/new_block);
+}
+
+bool btck_chainstate_manager_have_coin(btck_ChainstateManager* chainman, const btck_OutPoint* out_point)
+{
+    LOCK(chainman->m_chainman->GetMutex());
+    return chainman->m_chainman->ActiveChainstate().CoinsDB().HaveCoin(*(out_point->m_out_point));
+}
+
+btck_OutPoint btck_outpoint_create(btck_TxId *tx_id, uint32_t index)
+{
+
+    uint256 hash(tx_id->hash);
+
+
+    auto txid = Txid::FromUint256(hash);
+    COutPoint* outpoint = new COutPoint(txid, index);
+
+    btck_OutPoint btck_outpoint;
+    btck_outpoint.m_out_point = outpoint;
+    btck_outpoint.m_owned = true;
+
+    return btck_outpoint;
+}
+
+void btck_outpoint_destroy(btck_OutPoint* outpoint)
+{
+    if (outpoint && outpoint->m_owned && outpoint->m_out_point) {
+        delete outpoint->m_out_point;
+        outpoint->m_out_point = nullptr;
+        outpoint->m_owned = false;
+    }
 }

@@ -245,6 +245,8 @@ typedef struct btck_TransactionSpentOutputs btck_TransactionSpentOutputs;
  */
 typedef struct btck_Coin btck_Coin;
 
+typedef struct btck_OutPoint btck_OutPoint;
+
 /** Current sync state passed to tip changed callbacks. */
 typedef enum {
     btck_INIT_REINDEX,
@@ -426,6 +428,13 @@ typedef enum {
 typedef struct {
     unsigned char hash[32];
 } btck_BlockHash;
+
+/**
+ * A type-safe transaction identifier.
+ */
+typedef struct {
+    unsigned char hash[32];
+} btck_TxId;
 
 /**
  * Convenience struct for holding serialized data.
@@ -1372,6 +1381,12 @@ BITCOINKERNEL_API btck_BlockHash* BITCOINKERNEL_WARN_UNUSED_RESULT btck_block_in
 BITCOINKERNEL_API void btck_block_hash_destroy(btck_BlockHash* block_hash);
 
 ///@}
+
+BITCOINKERNEL_API bool BITCOINKERNEL_WARN_UNUSED_RESULT btck_chainstate_manager_have_coin(const btck_ChainstateManager* chainstate_manager, const btck_OutPoint* out_point) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API btck_OutPoint* BITCOINKERNEL_WARN_UNUSED_RESULT btck_outpoint_create(btck_TxId* tx_id, uint64_t index) BITCOINKERNEL_ARG_NONNULL(1);
+
+BITCOINKERNEL_API void btck_outpoint_destroy(btck_OutPoint* out_point);
 
 #ifdef __cplusplus
 } // extern "C"
