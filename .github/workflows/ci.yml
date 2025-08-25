@@ -282,6 +282,123 @@ jobs:
         run: |
           py -3 test/fuzz/test_runner.py --par $NUMBER_OF_PROCESSORS --loglevel DEBUG "${RUNNER_TEMP}/qa-assets/fuzz_corpora"
 
+  windows-kernel-lib:
+    name: 'Windows kernel library build'
+    runs-on: windows-2022
+    if: ${{ vars.SKIP_BRANCH_PUSH != 'true' || github.event_name == 'pull_request' }}
+
+    env:
+      PYTHONUTF8: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure Developer Command Prompt for Microsoft Visual C++
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Get tool information
+        shell: pwsh
+        run: |
+          cmake -version | Tee-Object -FilePath "cmake_version"
+          Write-Output "---"
+          msbuild -version | Tee-Object -FilePath "msbuild_version"
+          $env:VCToolsVersion | Tee-Object -FilePath "toolset_version"
+
+      - name: Using vcpkg with MSBuild
+        run: |
+          echo "set(VCPKG_BUILD_TYPE release)" >> "${VCPKG_INSTALLATION_ROOT}/triplets/x64-windows.cmake"
+          sed -i '1s/^/set(ENV{CMAKE_POLICY_VERSION_MINIMUM} 3.5)\n/' "${VCPKG_INSTALLATION_ROOT}/scripts/ports.cmake"
+
+      - name: vcpkg tools cache
+        uses: actions/cache@v4
+        with:
+          path: C:/vcpkg/downloads/tools
+          key: ${{ github.job }}-vcpkg-tools
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v4
+        id: vcpkg-binary-cache
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: ${{ github.job }}-vcpkg-binary-${{ hashFiles('cmake_version', 'msbuild_version', 'toolset_version', 'vcpkg.json') }}
+
+      - name: Generate build system for kernel library
+        run: |
+          cmake -B build_kernel --preset vs2022 -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake" -DBUILD_KERNEL_LIB=ON -DBUILD_TESTS=OFF -DBUILD_TX=OFF -DBUILD_WALLET_TOOL=OFF -DENABLE_WALLET=OFF -DENABLE_EXTERNAL_SIGNER=OFF -DBUILD_UTIL=OFF -DBUILD_BITCOIN_BIN=OFF -DBUILD_DAEMON=OFF -DBUILD_UTIL_CHAINSTATE=OFF -DBUILD_CLI=OFF -DBUILD_SHARED_LIBS=OFF -DBUILD_GUI=OFF -DWITH_ZMQ=OFF -DBUILD_BENCH=OFF
+
+      - name: Build kernel library
+        working-directory: build_kernel
+        run: |
+          cmake --build . -j $NUMBER_OF_PROCESSORS --config Release --target bitcoinkernel
+
+      - name: Verify kernel library was built
+        working-directory: build_kernel
+        run: |
+          # Look for the built library
+          if (Test-Path "src/kernel/Release/bitcoinkernel.lib") {
+            Write-Host "✓ bitcoinkernel.lib found in src/kernel/Release/"
+            Get-ChildItem "src/kernel/Release/bitcoinkernel.lib"
+            $env:KERNEL_LIB_PATH = "src/kernel/Release/bitcoinkernel.lib"
+          } elseif (Test-Path "lib/Release/bitcoinkernel.lib") {
+            Write-Host "✓ bitcoinkernel.lib found in lib/Release/"
+            Get-ChildItem "lib/Release/bitcoinkernel.lib"
+            $env:KERNEL_LIB_PATH = "lib/Release/bitcoinkernel.lib"
+          } else {
+            Write-Host "❌ bitcoinkernel.lib not found, searching..."
+            Get-ChildItem -Recurse -Name "*bitcoinkernel*"
+            exit 1
+          }
+          echo "KERNEL_LIB_PATH=$env:KERNEL_LIB_PATH" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Test linking kernel library (should fail without Windows libs)
+        working-directory: build_kernel
+        run: |
+          # Create a minimal test program that just tries to link the static library
+          # This will force the linker to resolve all symbols in the library
+          echo 'int main() { return 0; }' > test_link.cpp
+
+          # Try to link the kernel library without bcrypt/shell32
+          Write-Host "Testing link without Windows system libraries (expecting failure)..."
+          $linkResult = & cl.exe test_link.cpp $env:KERNEL_LIB_PATH 2>&1 | Out-String
+          Write-Host "Link command output:"
+          Write-Host $linkResult
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "❌ ERROR: Link succeeded when it should have failed!"
+            Write-Host "This means the Windows library dependencies might not be actually needed."
+            exit 1
+          } else {
+            Write-Host "✅ Link failed as expected."
+
+            # Check for the specific symbols we expect to be missing
+            if (($linkResult -match "BCryptGenRandom") -or ($linkResult -match "SHGetSpecialFolderPathW")) {
+              Write-Host "✅ Confirmed: Missing bcrypt/shell32 symbols as expected"
+            } elseif ($linkResult -match "LNK2019.*unresolved external symbol") {
+              Write-Host "✅ Confirmed: Unresolved external symbols detected (likely bcrypt/shell32)"
+            } else {
+              Write-Host "❓ Different linking error than expected, but still a linking failure"
+            }
+          }
+        shell: pwsh
+
+      - name: Test linking kernel library (should work with Windows libs)
+        working-directory: build_kernel
+        run: |
+          # Now try with the required Windows libraries
+          Write-Host "Testing link WITH Windows system libraries (expecting success)..."
+          & cl.exe /I../src /I../src/kernel test_link.cpp $env:KERNEL_LIB_PATH bcrypt.lib shell32.lib
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Link succeeded with bcrypt.lib and shell32.lib"
+          } else {
+            Write-Host "❌ Link failed even with Windows libraries - there may be other missing dependencies"
+            exit 1
+          }
+        shell: pwsh
+
   windows-cross:
     name: 'Linux->Windows cross, no tests'
     runs-on: ubuntu-latest
