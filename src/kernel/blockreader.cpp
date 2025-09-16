@@ -61,6 +61,8 @@ struct btck_BlockReader : Handle<btck_BlockReader, blockreader::BlockReader> {
 };
 struct btck_ChainParameters : Handle<btck_ChainParameters, std::unique_ptr<const CChainParams>> {
 };
+struct btck_Chain : Handle<btck_Chain, CChain> {
+};
 
 extern "C" {
 
@@ -107,5 +109,11 @@ btck_BlockReader* btck_blockreader_create(const btck_BlockReaderOptions* blockre
 void btck_blockreader_destroy(btck_BlockReader* blockreader)
 {
     delete blockreader;
+}
+
+const btck_Chain* btck_blockreader_get_validated_chain(const btck_BlockReader* blockreader)
+{
+    const auto& reader = btck_BlockReader::get(blockreader);
+    return btck_Chain::ref(&reader.GetValidatedChain());
 }
 } // extern "C"

@@ -39,6 +39,8 @@ BITCOINKERNEL_API btck_BlockReader* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockr
 
 BITCOINKERNEL_API void btck_blockreader_destroy(btck_BlockReader* blockreader);
 
+BITCOINKERNEL_API const btck_Chain* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_get_validated_chain(const btck_BlockReader* blockreader) BITCOINKERNEL_ARG_NONNULL(1);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
