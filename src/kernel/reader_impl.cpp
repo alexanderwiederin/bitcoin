@@ -43,7 +43,8 @@ BlockReader::BlockReader(const CChainParams& chain_params,
         .chainparams = chain_params,
         .blocks_dir = blocks_dir,
         .notifications = *notifications,
-        .block_tree_dir = data_dir / "index"};
+        .block_tree_dir = data_dir / "index",
+    .read_only = true};
 
     m_blockman = std::make_unique<node::BlockManager>(*m_interrupt, blockman_options);
 
