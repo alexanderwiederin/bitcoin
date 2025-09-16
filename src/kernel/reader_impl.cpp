@@ -36,7 +36,7 @@ BlockReader::BlockReader(const CChainParams& chain_params,
                          const fs::path& data_dir,
                          const fs::path& blocks_dir,
                          util::SignalInterrupt& interrupt)
-    : m_interrupt(&interrupt)
+    : m_interrupt(interrupt), m_notifications(std::make_unique<ReadOnlyNotifications>())
 {
     auto notifications = std::make_unique<ReadOnlyNotifications>();
 
@@ -47,7 +47,7 @@ BlockReader::BlockReader(const CChainParams& chain_params,
         .block_tree_dir = data_dir / "blocks" / "index",
         .read_only = true};
 
-    m_blockman = std::make_unique<node::BlockManager>(*m_interrupt, blockman_options);
+    m_blockman = std::make_unique<node::BlockManager>(m_interrupt, blockman_options);
 
     if (!LoadBlockIndex()) {
         LogError("BlockReader: Failed to load block index");

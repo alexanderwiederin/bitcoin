@@ -5,6 +5,7 @@
 #ifndef BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 #define BITCOIN_KERNEL_BLOCKREADER_READER_IMPL_H
 
+#include <kernel/notifications_interface.h>
 #include <kernel/chainparams.h>
 #include <node/blockstorage.h>
 #include <util/fs.h>
@@ -16,7 +17,8 @@ class BlockReader
 {
 private:
     std::unique_ptr<node::BlockManager> m_blockman;
-    std::unique_ptr<util::SignalInterrupt> m_interrupt;
+    const util::SignalInterrupt& m_interrupt;
+    std::unique_ptr<kernel::Notifications> m_notifications;
     CChain m_validated_chain;
 
     bool LoadBlockIndex();
