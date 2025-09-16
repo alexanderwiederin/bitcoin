@@ -1163,16 +1163,16 @@ struct btck_BlockReader : Handle<btck_BlockReader, BlockReaderWrapper> {
 
 btck_BlockReaderOptions* btck_blockreader_options_create(
     const btck_Context* context,
-    const char* blocks_directory,
-    size_t blocks_directory_len,
     const char* data_directory,
-    size_t data_directory_len)
+    size_t data_directory_len,
+    const char* blocks_directory,
+    size_t blocks_directory_len)
 {
     try {
-        fs::path abs_blocks_dir{fs::absolute(fs::PathFromString({blocks_directory, blocks_directory_len}))};
-        fs::create_directories(abs_blocks_dir);
         fs::path abs_data_dir{fs::absolute(fs::PathFromString({data_directory, data_directory_len}))};
         fs::create_directories(abs_data_dir);
+        fs::path abs_blocks_dir{fs::absolute(fs::PathFromString({blocks_directory, blocks_directory_len}))};
+        fs::create_directories(abs_blocks_dir);
 
         return btck_BlockReaderOptions::create(btck_Context::get(context), abs_data_dir, abs_blocks_dir);
     } catch (const std::exception& e) {
