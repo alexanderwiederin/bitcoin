@@ -29,6 +29,9 @@ public:
     void fatalError(const bilingual_str& message) override {}
 };
 
+BlockReader::BlockReader(const Options& options)
+    : BlockReader(options.chainparams, options.data_dir, options.blocks_dir) {}
+
 BlockReader::BlockReader(const CChainParams& chain_params,
                          const fs::path& data_dir,
                          const fs::path& blocks_dir)

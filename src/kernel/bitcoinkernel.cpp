@@ -2,7 +2,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "kernel/blockreader_opts.h"
 #include "kernel/reader_impl.h"
 #define BITCOINKERNEL_BUILD
 
@@ -12,7 +11,6 @@
 #include <coins.h>
 #include <consensus/amount.h>
 #include <consensus/validation.h>
-#include <kernel/blockreader_opts.h>
 #include <kernel/caches.h>
 #include <kernel/chainparams.h>
 #include <kernel/checks.h>
@@ -1135,28 +1133,40 @@ int btck_chain_contains(const btck_Chain* chain, const btck_BlockTreeEntry* entr
     return btck_Chain::get(chain).Contains(&btck_BlockTreeEntry::get(entry)) ? 1 : 0;
 }
 
-struct btck_BlockReaderOptions : Handle<btck_BlockReaderOptions, kernel::BlockReaderOpts> {
+struct BlockReaderOptions {
+    mutable Mutex m_mutex;
+    std::shared_ptr<const Context> m_context;
+    blockreader::BlockReader::Options m_blockreader_options GUARDED_BY(m_mutex);
+
+    BlockReaderOptions(const std::shared_ptr<const Context>& context, const fs::path& data_dir, const fs::path& blocks_dir)
+        : m_context{context},
+          m_blockreader_options{blockreader::BlockReader::Options{
+              .chainparams = *context->m_chainparams,
+              .blocks_dir = blocks_dir,
+              .data_dir = data_dir}}
+    {
+    }
+};
+
+struct btck_BlockReaderOptions : Handle<btck_BlockReaderOptions, BlockReaderOptions> {
 };
 struct btck_BlockReader : Handle<btck_BlockReader, blockreader::BlockReader> {
 };
 
 btck_BlockReaderOptions* btck_blockreader_options_create(
     const btck_Context* context,
-    const btck_ChainParameters* chain_parameters,
     const char* blocks_directory,
     size_t blocks_directory_len,
     const char* data_directory,
     size_t data_directory_len)
 {
     try {
-        const auto& chainparams = *btck_ChainParameters::get(chain_parameters);
-
         fs::path abs_blocks_dir{fs::absolute(fs::PathFromString({blocks_directory, blocks_directory_len}))};
         fs::create_directories(abs_blocks_dir);
         fs::path abs_data_dir{fs::absolute(fs::PathFromString({data_directory, data_directory_len}))};
         fs::create_directories(abs_data_dir);
 
-        return btck_BlockReaderOptions::create(chainparams, abs_blocks_dir, abs_data_dir);
+        return btck_BlockReaderOptions::create(btck_Context::get(context), abs_data_dir, abs_blocks_dir);
     } catch (const std::exception& e) {
         LogError("Failed to create block reader options: %s", e.what());
         return nullptr;
@@ -1172,8 +1182,8 @@ btck_BlockReader* btck_blockreader_create(const btck_BlockReaderOptions* blockre
 {
     try {
         const auto& opts{btck_BlockReaderOptions::get(blockreader_options)};
-
-        return btck_BlockReader::create(opts.chainparams, opts.data_dir, opts.blocks_dir);
+        LOCK(opts.m_mutex);
+        return btck_BlockReader::create(opts.m_blockreader_options);
     } catch (const std::exception& e) {
         LogError("Failed to create block reader: %s", e.what());
         return nullptr;

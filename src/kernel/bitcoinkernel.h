@@ -1340,11 +1340,10 @@ typedef struct btck_BlockReader btck_BlockReader;
 
 BITCOINKERNEL_API btck_BlockReaderOptions* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_options_create(
     const btck_Context* context,
-    const btck_ChainParameters* chain_parameters,
     const char* blocks_directory,
     size_t blocks_directory_len,
     const char* data_directory,
-    size_t data_directory_len) BITCOINKERNEL_ARG_NONNULL(1, 2, 3, 5);
+    size_t data_directory_len) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
 BITCOINKERNEL_API void btck_blockreader_options_destroy(btck_BlockReaderOptions* blockreader_options);
 

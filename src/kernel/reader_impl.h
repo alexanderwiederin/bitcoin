@@ -22,9 +22,16 @@ private:
     bool LoadBlockIndex();
 
 public:
-    explicit BlockReader(const CChainParams& chain_params,
-                         const fs::path& data_dir,
-                         const fs::path& blocks_dir);
+    struct Options {
+        const CChainParams& chainparams;
+        const fs::path blocks_dir;
+        const fs::path data_dir;
+    };
+
+    BlockReader(const Options& options);
+    BlockReader(const CChainParams& chain_params,
+                const fs::path& data_dir,
+                const fs::path& blocks_dir);
 
     ~BlockReader() = default;
 
