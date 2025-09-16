@@ -1358,6 +1358,11 @@ BITCOINKERNEL_API btck_Block* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_
     const btck_BlockReader* blockreader,
     const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
 
+BITCOINKERNEL_API btck_BlockSpentOutputs* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_block_spent_outputs_read(
+    const btck_BlockReader* blockreader,
+    const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+
 
 #ifdef __cplusplus
 } // extern "C"

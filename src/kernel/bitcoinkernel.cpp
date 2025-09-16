@@ -1228,3 +1228,19 @@ btck_Block* btck_blockreader_read_block(
 
     return btck_Block::create(block);
 }
+
+btck_BlockSpentOutputs* btck_blockreader_block_spent_outputs_read(const btck_BlockReader* blockreader, const btck_BlockTreeEntry* entry)
+{
+    if (btck_BlockTreeEntry::get(entry).nHeight < 1) {
+        LogDebug(BCLog::KERNEL, "The genesis block does not have any spent outputs.");
+        return nullptr;
+    }
+    auto block_undo{std::make_shared<CBlockUndo>()};
+    if (!btck_BlockReader::get(blockreader).m_reader->GetBlockManager().ReadBlockUndo(*block_undo, btck_BlockTreeEntry::get(entry))) {
+        LogError("Failed to read block spent outputs data.");
+        return nullptr;
+    }
+    return btck_BlockSpentOutputs::create(block_undo);
+}
+
+
