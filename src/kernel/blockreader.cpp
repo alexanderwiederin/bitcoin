@@ -64,6 +64,12 @@ struct btck_ChainParameters : Handle<btck_ChainParameters, std::unique_ptr<const
 struct btck_Chain : Handle<btck_Chain, CChain> {
 };
 
+struct btck_BlockTreeEntry : Handle<btck_BlockTreeEntry, CBlockIndex> {
+};
+
+struct btck_Block : Handle<btck_Block, std::shared_ptr<const CBlock>> {
+};
+
 extern "C" {
 
 btck_BlockReaderOptions* btck_blockreader_options_create(
@@ -116,4 +122,21 @@ const btck_Chain* btck_blockreader_get_validated_chain(const btck_BlockReader* b
     const auto& reader = btck_BlockReader::get(blockreader);
     return btck_Chain::ref(&reader.GetValidatedChain());
 }
+
+btck_Block* btck_blockreader_read_block(
+    const btck_BlockReader* blockreader,
+    const btck_BlockTreeEntry* block_tree_entry)
+{
+    const auto& reader = btck_BlockReader::get(blockreader);
+    const auto& block_index = btck_BlockTreeEntry::get(block_tree_entry);
+
+    auto block = std::make_shared<CBlock>();
+    if (!reader.GetBlockManager().ReadBlock(*block, block_index)) {
+        LogError("BlockReader: Failed to read block");
+        return nullptr;
+    }
+
+    return btck_Block::create(block);
+}
+
 } // extern "C"
