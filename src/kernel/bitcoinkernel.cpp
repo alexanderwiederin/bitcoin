@@ -1186,6 +1186,7 @@ btck_BlockReader* btck_blockreader_create(const btck_BlockReaderOptions* blockre
     try {
         reader = std::make_unique<blockreader::BlockReader>(opts.m_blockreader_options);
     } catch (const std::exception& e) {
+        std::cerr << "Exception in btck_blockreader_create: " << e.what() << std::endl;
         LogError("Failed to create block reader: %s", e.what());
         return nullptr;
     }
