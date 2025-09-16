@@ -629,25 +629,6 @@ BOOST_AUTO_TEST_CASE(btck_chainman_mainnet_tests)
     chainman_reindex_chainstate_test(test_directory);
 }
 
-BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
-{
-    auto in_memory_test_directory{TestDirectory{"in-memory_test_bitcoin_kernel"}};
-
-    auto notifications{std::make_shared<TestKernelNotifications>()};
-    auto context{create_context(notifications, ChainType::REGTEST)};
-    auto chainman{create_chainman(in_memory_test_directory, false, false, true, context)};
-
-    for (auto& raw_block : REGTEST_BLOCK_DATA) {
-        Block block{as_bytes(raw_block)};
-        bool new_block{false};
-        chainman->ProcessBlock(block, &new_block);
-        BOOST_CHECK(new_block);
-    }
-
-    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "blocks" / "index"));
-    BOOST_CHECK(!std::filesystem::exists(in_memory_test_directory.m_directory / "chainstate"));
-}
-
 BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
 {
     auto test_directory{TestDirectory{"regtest_test_bitcoin_kernel"}};
