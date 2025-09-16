@@ -29,13 +29,14 @@ public:
     void fatalError(const bilingual_str& message) override {}
 };
 
-BlockReader::BlockReader(const Options& options)
-    : BlockReader(options.chainparams, options.data_dir, options.blocks_dir) {}
+BlockReader::BlockReader(const Options& options, util::SignalInterrupt& interrupt)
+    : BlockReader(options.chainparams, options.data_dir, options.blocks_dir, interrupt) {}
 
 BlockReader::BlockReader(const CChainParams& chain_params,
                          const fs::path& data_dir,
-                         const fs::path& blocks_dir)
-    : m_interrupt(std::make_unique<util::SignalInterrupt>())
+                         const fs::path& blocks_dir,
+                         util::SignalInterrupt& interrupt)
+    : m_interrupt(&interrupt)
 {
     auto notifications = std::make_unique<ReadOnlyNotifications>();
 
@@ -44,7 +45,7 @@ BlockReader::BlockReader(const CChainParams& chain_params,
         .blocks_dir = blocks_dir,
         .notifications = *notifications,
         .block_tree_dir = data_dir / "index",
-    .read_only = true};
+        .read_only = true};
 
     m_blockman = std::make_unique<node::BlockManager>(*m_interrupt, blockman_options);
 

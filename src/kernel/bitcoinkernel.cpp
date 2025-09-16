@@ -1148,9 +1148,17 @@ struct BlockReaderOptions {
     }
 };
 
+struct BlockReaderWrapper {
+    std::unique_ptr<blockreader::BlockReader> m_reader;
+    std::shared_ptr<const Context> m_context;
+
+    BlockReaderWrapper(std::unique_ptr<blockreader::BlockReader> reader, std::shared_ptr<const Context> context)
+        : m_reader(std::move(reader)), m_context(std::move(context)) {}
+};
+
 struct btck_BlockReaderOptions : Handle<btck_BlockReaderOptions, BlockReaderOptions> {
 };
-struct btck_BlockReader : Handle<btck_BlockReader, blockreader::BlockReader> {
+struct btck_BlockReader : Handle<btck_BlockReader, BlockReaderWrapper> {
 };
 
 btck_BlockReaderOptions* btck_blockreader_options_create(
@@ -1184,9 +1192,9 @@ btck_BlockReader* btck_blockreader_create(const btck_BlockReaderOptions* blockre
     std::unique_ptr<blockreader::BlockReader> reader;
 
     try {
-        reader = std::make_unique<blockreader::BlockReader>(opts.m_blockreader_options);
+        LOCK(opts.m_mutex);
+        reader = std::make_unique<blockreader::BlockReader>(opts.m_blockreader_options, *opts.m_context->m_interrupt);
     } catch (const std::exception& e) {
-        std::cerr << "Exception in btck_blockreader_create: " << e.what() << std::endl;
         LogError("Failed to create block reader: %s", e.what());
         return nullptr;
     }
@@ -1201,19 +1209,19 @@ void btck_blockreader_destroy(btck_BlockReader* blockreader)
 
 const btck_Chain* btck_blockreader_get_validated_chain(const btck_BlockReader* blockreader)
 {
-    const auto& reader = btck_BlockReader::get(blockreader);
-    return btck_Chain::ref(&reader.GetValidatedChain());
+    const auto& wrapper = btck_BlockReader::get(blockreader);
+    return btck_Chain::ref(&wrapper.m_reader->GetValidatedChain());
 }
 
 btck_Block* btck_blockreader_read_block(
     const btck_BlockReader* blockreader,
     const btck_BlockTreeEntry* block_tree_entry)
 {
-    const auto& reader = btck_BlockReader::get(blockreader);
+    const auto& wrapper = btck_BlockReader::get(blockreader);
     const auto& block_index = btck_BlockTreeEntry::get(block_tree_entry);
 
     auto block = std::make_shared<CBlock>();
-    if (!reader.GetBlockManager().ReadBlock(*block, block_index)) {
+    if (!wrapper.m_reader->GetBlockManager().ReadBlock(*block, block_index)) {
         LogError("BlockReader: Failed to read block");
         return nullptr;
     }

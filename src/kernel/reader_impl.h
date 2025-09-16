@@ -28,10 +28,11 @@ public:
         const fs::path data_dir;
     };
 
-    BlockReader(const Options& options);
+    BlockReader(const Options& options, util::SignalInterrupt& interrupt);
     BlockReader(const CChainParams& chain_params,
                 const fs::path& data_dir,
-                const fs::path& blocks_dir);
+                const fs::path& blocks_dir,
+                util::SignalInterrupt& interrupt);
 
     ~BlockReader() = default;
 
