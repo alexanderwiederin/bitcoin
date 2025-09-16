@@ -1180,14 +1180,17 @@ void btck_blockreader_options_destroy(btck_BlockReaderOptions* blockreader_optio
 
 btck_BlockReader* btck_blockreader_create(const btck_BlockReaderOptions* blockreader_options)
 {
+    const auto& opts{btck_BlockReaderOptions::get(blockreader_options)};
+    std::unique_ptr<blockreader::BlockReader> reader;
+
     try {
-        const auto& opts{btck_BlockReaderOptions::get(blockreader_options)};
-        LOCK(opts.m_mutex);
-        return btck_BlockReader::create(opts.m_blockreader_options);
+        reader = std::make_unique<blockreader::BlockReader>(opts.m_blockreader_options);
     } catch (const std::exception& e) {
         LogError("Failed to create block reader: %s", e.what());
         return nullptr;
     }
+
+    return btck_BlockReader::create(std::move(reader), opts.m_context);
 }
 
 void btck_blockreader_destroy(btck_BlockReader* blockreader)
