@@ -31,7 +31,8 @@ class CoinStatsIndexTest(BitcoinTestFramework):
                 280200,
             ],
         )
-        self.start_nodes()
+        self.start_node(0)
+        self.start_node(1, extra_args=["-reindex"])
 
     def run_test(self):
         self._test_coin_stats_index_compatibility()
