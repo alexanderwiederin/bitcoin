@@ -19,6 +19,8 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.supports_cli = False
         self.extra_args = [["-coinstatsindex"],["-coinstatsindex"]]
+        self.generate(self.nodes[0], 200)
+        self.sync_all()
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_previous_releases()
