@@ -16,6 +16,7 @@ from test_framework.util import assert_equal
 class CoinStatsIndexTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
+        self.setup_clean_chain = True
         self.supports_cli = False
         self.extra_args = [["-coinstatsindex"],["-coinstatsindex"]]
 
