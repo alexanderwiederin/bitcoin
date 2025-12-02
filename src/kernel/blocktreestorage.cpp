@@ -64,6 +64,30 @@ static int64_t ReadHeaderFileDataEnd(AutoFile& file)
     return data_end;
 }
 
+static void LogReadOnlyLockStatus(const fs::path& path, util::LockResult result)
+{
+    if (result != util::LockResult::Success) {
+        LogPrintf("BlockTreeStore: Directory %s is locked by another instance. "
+                  "Proceeding in read-only mode - data may be temporarily inconsistent during concurrent writes.\n",
+                  fs::PathToString(path));
+    } else {
+        LogPrintf("BlockTreeStore: Directory %s is not locked - data will remain static in read-only mode.\n",
+                  fs::PathToString(path));
+    }
+}
+
+static std::string GetLockErrorMessage(util::LockResult result)
+{
+    switch (result) {
+    case util::LockResult::ErrorLock:
+        return "Another instance is using it";
+    case util::LockResult::ErrorWrite:
+        return "Cannot create lock file (check permissions)";
+    default:
+        return "Unknown error";
+    }
+}
+
 static int64_t CalculateBlockFilesPos(int nFile)
 {
     return BLOCK_FILES_DATA_START_POS + nFile * (BLOCK_FILE_INFO_WRAPPER_SIZE + CHECKSUM_SIZE);
@@ -149,63 +173,33 @@ BlockTreeStore::BlockTreeStore(const fs::path& path, const CChainParams& params,
     assert(GetSerializeSize(DiskBlockIndexWrapper{}) == DISK_BLOCK_INDEX_WRAPPER_SIZE);
     assert(GetSerializeSize(BlockFileInfoWrapper{}) == BLOCK_FILE_INFO_WRAPPER_SIZE);
 
-    if (read_only) {
-        auto lock_result = util::LockDirectory(path, ".lock", /*probe_only=*/true);
-        if (lock_result != util::LockResult::Success) {
-            LogPrintf("BlockTreeStore: Directory %s is in use (locked by another instance). "
-                      "Continuing with read-only access. Note: data may be temporarily inconsistent during concurrent writes.\n",
-                      fs::PathToString(path));
-        } else {
-            LogPrintf("BlockTreeStore: Directory %s is not locked - data will remain static in read-only mode.\n",
-                      fs::PathToString(path));
-        }
-    } else {
-        fs::create_directories(path);
-        if (wipe_data) {
-            fs::remove(m_header_file_path);
-            fs::remove(m_block_files_file_path);
-        }
+    AcquireDirectoryLock();
 
-        auto lock_result = util::LockDirectory(path, ".lock", /*probe_only=*/false);
-        if (lock_result != util::LockResult::Success) {
-            std::string error_msg;
-            switch (lock_result) {
-            case util::LockResult::ErrorLock:
-                error_msg = "Another instance is using it";
-                break;
-            case util::LockResult::ErrorWrite:
-                error_msg = "Cannot create lock file (check permission)";
-                break;
-            default:
-                error_msg = "Unknown error";
-                break;
-            }
-            throw BlockTreeStoreError(strprintf("Cannot obtain lock: %s", error_msg));
-        }
+    if (!m_read_only) {
+        PrepareDirectory(wipe_data);
     }
 
-    bool header_file_exists{fs::exists(m_header_file_path)};
-    bool block_files_file_exists{fs::exists(m_block_files_file_path)};
-    if (header_file_exists != block_files_file_exists) {
+    // Validate file consistency
+    bool header_exists = fs::exists(m_header_file_path);
+    bool block_files_exists = fs::exists(m_block_files_file_path);
+
+    if (header_exists != block_files_exists) {
         throw BlockTreeStoreError("Block tree store is in an inconsistent state");
     }
-    if (!header_file_exists && !block_files_file_exists) {
-        if (read_only) {
+
+    if (!header_exists) {
+        if (m_read_only) {
             throw BlockTreeStoreError("Cannot initialize read-only block tree store: required files do not exist");
         }
+
+        LOCK(m_mutex);
         CreateHeaderFile();
         CreateBlockFilesFile();
     }
 
     CheckMagicAndVersion();
-
     LOCK(m_mutex);
-
-    if (!read_only) {
-        (void)ApplyLog(); // Ignore an incomplete log file here, the integrity of the data is still intact.
-    } else if (fs::exists(m_log_file_path)) {
-        (void)ValidateLog();
-    }
+    ProcessPendingLog();
 }
 
 BlockTreeStore::~BlockTreeStore()
@@ -213,6 +207,44 @@ BlockTreeStore::~BlockTreeStore()
     if (!m_read_only) {
         UnlockDirectory(m_path, ".lock");
         LogPrintf("BlockTreeStore: Released lock on %s\n", fs::PathToString(m_path));
+    }
+}
+
+void BlockTreeStore::AcquireDirectoryLock()
+{
+    auto lock_result = util::LockDirectory(m_path, ".lock", /*probe_only=*/m_read_only);
+
+    if (m_read_only) {
+        LogReadOnlyLockStatus(m_path, lock_result);
+        return;
+    }
+
+    // Write mode - lock must succeed
+    if (lock_result == util::LockResult::Success) {
+        return;
+    }
+
+    throw BlockTreeStoreError(strprintf("Cannot obtain lock: %s", GetLockErrorMessage(lock_result)));
+}
+
+void BlockTreeStore::PrepareDirectory(bool wipe_data)
+{
+    fs::create_directories(m_path);
+
+    if (wipe_data) {
+        fs::remove(m_header_file_path);
+        fs::remove(m_block_files_file_path);
+    }
+}
+
+void BlockTreeStore::ProcessPendingLog()
+{
+    if (!m_read_only) {
+        // In write mode, apply any pending log operations
+        (void)ApplyLog(); // Ignore incomplete log - data integrity is intact
+    } else if (fs::exists(m_log_file_path)) {
+        // In read-only mode, validate log if present but don't apply
+        (void)ValidateLog();
     }
 }
 

@@ -80,6 +80,11 @@ private:
 
     mutable Mutex m_mutex;
 
+    // Initialization helpers (called during construction)
+    void AcquireDirectoryLock();
+    void PrepareDirectory(bool wipe_data);
+    void ProcessPendingLog() EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
     void CreateHeaderFile() const EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
     void CreateBlockFilesFile() const EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
     void CheckMagicAndVersion() const EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
