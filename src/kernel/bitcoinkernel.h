@@ -232,6 +232,18 @@ typedef struct btck_BlockValidationState btck_BlockValidationState;
 typedef struct btck_Chain btck_Chain;
 
 /**
+ * Opaque data structure for holding an immutable chain snapshot.
+ *
+ * A chain snapshot represents a point-in-time view of the chain that
+ * remains valid even if the underlying chain is updated. This is returned
+ * by block readers and maintains its own reference count to ensure the
+ * snapshot stays alive for the lifetime of this object.
+ *
+ * Use btck_chain_snapshot_destroy() to release the snapshot when done.
+ */
+typedef struct btck_ChainSnapshot btck_ChainSnapshot;
+
+/**
  * Opaque data structure for holding a block's spent outputs.
  *
  * Contains all the previous outputs consumed by all transactions in a specific
@@ -283,6 +295,22 @@ typedef struct btck_TransactionInput btck_TransactionInput;
 typedef struct btck_TransactionOutPoint btck_TransactionOutPoint;
 
 typedef struct btck_Txid btck_Txid;
+
+/**
+ * Opaque data structure for holding options for creating a new block reader.
+ *
+ * The block reader options are used to set some parameters for the block reader.
+ */
+typedef struct btck_BlockReaderOptions btck_BlockReaderOptions;
+
+/**
+ * Opaque data structure for holding a block reader.
+ *
+ * The block reader provides read-only access to block data without
+ * requiring full validation capabilities. It can be used to read blocks,
+ * spent outputs and access the validated chain.
+ */
+typedef struct btck_BlockReader btck_BlockReader;
 
 /** Current sync state passed to tip changed callbacks. */
 typedef uint8_t btck_SynchronizationState;
@@ -1093,6 +1121,113 @@ BITCOINKERNEL_API void btck_chainstate_manager_destroy(btck_ChainstateManager* c
 
 ///@}
 
+/** @name BlockReaderOptions
+ * Function for working with block reader options
+ */
+///@{
+
+/**
+ * @brief Create options for the block reader.
+ *
+ * @param[in] context           Non-null, the created options and through it the block reader will
+ *                              associate with this kernel context for the duration of their lifetimes.
+ * @param[in] data_directory    Path string of the directory containing the
+ *                              chainstate data. If provided, the directory must already exist.
+ * @param[in] data_directory_len Length of the data_directory string.
+ * @param[in] blocks_directory  Path string of the directory containing the block
+ *                              data. If provided, the directory must already exist.
+ * @param[in] blocks_directory_len Length of the blocks_directory string.
+ * @return                      The allocated block reader options, or null on error.
+ */
+BITCOINKERNEL_API btck_BlockReaderOptions* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_options_create(
+    const btck_Context* context,
+    const char* data_directory,
+    size_t data_directory_len,
+    const char* blocks_directory,
+    size_t blocks_directory_len) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * Destroy the block reader options.
+ */
+BITCOINKERNEL_API void btck_blockreader_options_destroy(
+    btck_BlockReaderOptions* options);
+
+///@}
+
+/** @name BlockReader
+ * Functions for working with the block reader.
+ */
+///@{
+
+/**
+ * @brief Create a block reader. This provides read-only access to blockchain
+ * data without requiring full validation capabilities. The block reader can
+ * access blocks, spent outputs, and the validated chain.
+ *
+ * @param[in] options Non-null, created by @ref btck_blockreader_options_create.
+ * @return            The allocated block reader, or null on error.
+ */
+BITCOINKERNEL_API btck_BlockReader* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_create(
+    const btck_BlockReaderOptions* options) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Returns an immutable snapshot of the validated chain. The returned
+ * snapshot is owned by the caller and must be destroyed with
+ * btck_chain_snapshot_destroy(). The snapshot remains valid even if the block
+ * reader is refreshed or destroyed. The chain represents the best validated
+ * chain at the time of the block reader's creation or last refresh.
+ *
+ * @param[in] reader Non-null.
+ * @return           An owned chain snapshot, or null on failure. Must be freed
+ *                   with btck_chain_snapshot_destroy().
+ */
+BITCOINKERNEL_API const btck_ChainSnapshot* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_get_chain_snapshot(
+    const btck_BlockReader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Reads the block the passed in block tree entry points to from disk and
+ * returns it.
+ *
+ * @param[in] reader           Non-null.
+ * @param[in] entry Non-null.
+ * @return                     The read out block, or null on error.
+ */
+BITCOINKERNEL_API btck_Block* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_read_block(
+    const btck_BlockReader* reader,
+    const btck_BlockTreeEntry* entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+/**
+ * @brief Reads the block spent outputs data the passed in block tree entry
+ * points to from disk and returns it.
+ *
+ * @param[in] reader           Non-null.
+ * @param[in] entry Non-null.
+ * @return                     The read out block spent outputs, or null on error.
+ */
+BITCOINKERNEL_API btck_BlockSpentOutputs* BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_read_block_spent_outputs(
+    const btck_BlockReader* reader,
+    const btck_BlockTreeEntry* entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+/**
+ * @brief Refresh the block reader's view of the chain state. This updates the
+ * reader's internal state to reflect any changes that may have occurred since
+ * the reader was created or last refreshed. Should be called if the underlying
+ * data has been modified by other processes.
+ *
+ * @param[in] reader Non-null.
+ * @return           0 if the refresh was successful, non-zero otherwise.
+ */
+BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_blockreader_refresh(
+    btck_BlockReader* reader) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * Destroy the block reader.
+ */
+BITCOINKERNEL_API void btck_blockreader_destroy(
+    btck_BlockReader* reader);
+
+///@}
+
 /** @name Block
  * Functions for working with blocks.
  */
@@ -1238,6 +1373,42 @@ BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT bt
 BITCOINKERNEL_API int BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_contains(
     const btck_Chain* chain,
     const btck_BlockTreeEntry* block_tree_entry) BITCOINKERNEL_ARG_NONNULL(1, 2);
+
+///@}
+
+/** @name ChainSnapshot
+ * Functions for working with chain snapshots
+ */
+///@{
+
+/**
+ * @brief Return the height of the tip of the chain snapshot.
+ *
+ * @param[in] chain_snapshot Non-null.
+ * @return                   The current height.
+ */
+BITCOINKERNEL_API int32_t BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_snapshot_get_height(
+    const btck_ChainSnapshot* chain_snapshot) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Retrieve a block tree entry by its height in the chain snapshot.
+ *
+ * @param[in] chain_snapshot Non-null.
+ * @param[in] block_height   Height in the chain of the to be retrieved block tree entry.
+ * @return                   The block tree entry at a certain height in the chain snapshot, or null
+ *                           if the height is out of bounds.
+ */
+BITCOINKERNEL_API const btck_BlockTreeEntry* BITCOINKERNEL_WARN_UNUSED_RESULT btck_chain_snapshot_get_by_height(
+    const btck_ChainSnapshot* chain_snapshot,
+    int block_height) BITCOINKERNEL_ARG_NONNULL(1);
+
+/**
+ * @brief Destroy the chain snapshot and release its resources.
+ *
+ * @param[in] chain_snapshot Non-null, the chain snapshot to destroy.
+ */
+BITCOINKERNEL_API void btck_chain_snapsshot_destroy(
+    btck_ChainSnapshot* chain_snapshot) BITCOINKERNEL_ARG_NONNULL(1);
 
 ///@}
 
