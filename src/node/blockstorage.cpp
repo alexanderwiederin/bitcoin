@@ -1233,6 +1233,16 @@ std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateAndMigrateBlockTree(
     return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, m_opts.wipe_block_tree_data);
 }
 
+std::unique_ptr<kernel::BlockTreeStore> BlockManager::CreateReadOnlyBlockTree()
+{
+    if (fs::exists(m_opts.block_tree_dir / "headers.dat") &&
+        fs::exists(m_opts.block_tree_dir / "blockfiles.dat")) {
+        return std::make_unique<kernel::BlockTreeStore>(m_opts.block_tree_dir, m_opts.chainparams, /*wipe_data=*/false, /*read_only=*/false);
+    }
+
+    throw std::runtime_error("Cannot open in read-only mode: required files not found");
+}
+
 BlockManager::BlockManager(const util::SignalInterrupt& interrupt, Options opts)
     : m_prune_mode{opts.prune_target > 0},
       m_obfuscation{InitBlocksdirXorKey(opts)},
@@ -1241,6 +1251,11 @@ BlockManager::BlockManager(const util::SignalInterrupt& interrupt, Options opts)
       m_undo_file_seq{FlatFileSeq{m_opts.blocks_dir, "rev", UNDOFILE_CHUNK_SIZE}},
       m_interrupt{interrupt}
 {
+    if (m_opts.read_only) {
+        m_block_tree_db = CreateReadOnlyBlockTree();
+        return;
+    }
+
     m_block_tree_db = CreateAndMigrateBlockTree();
 
     if (m_opts.wipe_block_tree_data) {
