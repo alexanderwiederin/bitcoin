@@ -6,6 +6,7 @@
 #include <chain.h>
 #include <tinyformat.h>
 #include <util/check.h>
+#include <memory>
 
 std::string CBlockIndex::ToString() const
 {
@@ -15,12 +16,21 @@ std::string CBlockIndex::ToString() const
 
 void CChain::SetTip(CBlockIndex& block)
 {
-    CBlockIndex* pindex = &block;
-    vChain.resize(pindex->nHeight + 1);
-    while (pindex && vChain[pindex->nHeight] != pindex) {
-        vChain[pindex->nHeight] = pindex;
-        pindex = pindex->pprev;
+    std::lock_guard<std::mutex> lock(m_update_mutex);
+
+    auto new_chain_mut = std::make_shared<std::vector<CBlockIndex*>>();
+    new_chain_mut->resize(block.nHeight + 1);
+
+    CBlockIndex* index = &block;
+    while (index) {
+        (*new_chain_mut)[index->nHeight] = index;
+        index = index->pprev;
     }
+
+    std::shared_ptr<const std::vector<CBlockIndex*>> new_chain = new_chain_mut;
+    std::atomic_store(
+        const_cast<std::shared_ptr<const std::vector<CBlockIndex*>>*>(&m_vChain),
+        new_chain);
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)
@@ -47,23 +57,14 @@ CBlockLocator GetLocator(const CBlockIndex* index)
     return CBlockLocator{LocatorEntries(index)};
 }
 
-const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
-    if (pindex == nullptr) {
-        return nullptr;
-    }
-    if (pindex->nHeight > Height())
-        pindex = pindex->GetAncestor(Height());
-    while (pindex && !Contains(pindex))
-        pindex = pindex->pprev;
-    return pindex;
+const CBlockIndex* CChain::FindFork(const CBlockIndex* index) const
+{
+    return GetSnapshot().FindFork(index);
 }
 
 CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
 {
-    std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
-    std::vector<CBlockIndex*>::const_iterator lower = std::lower_bound(vChain.begin(), vChain.end(), blockparams,
-        [](CBlockIndex* pBlock, const std::pair<int64_t, int>& blockparams) -> bool { return pBlock->GetBlockTimeMax() < blockparams.first || pBlock->nHeight < blockparams.second; });
-    return (lower == vChain.end() ? nullptr : *lower);
+    return GetSnapshot().FindEarliestAtLeast(nTime, height);
 }
 
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */

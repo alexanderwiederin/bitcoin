@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -379,53 +380,182 @@ public:
 /** An in-memory indexed chain of blocks. */
 class CChain
 {
+public:
+    /**
+     * A consistent snapshot of the chain at a point in time.
+     *
+     * Multiple operations on a single Snapshot are guaranteed to see the same
+     * chain state, even if the underlying CChain is modified by other threads.
+     * This eliminates TOCTOU (Time-Of-Check-Time-Of-Use) race conditions.
+     *
+     * Example:
+     *   auto snap = chain.GetSnapshot();
+     *   int height = snap.Height();        // Consistent
+     *   CBlockIndex* tip = snap.Tip();     // Same chain as Height()
+     *   CBlockIndex* block = snap[height]; // Still same chain
+     */
+    class Snapshot
+    {
+    private:
+        std::shared_ptr<const std::vector<CBlockIndex*>> m_chain;
+
+        friend class CChain;
+        explicit Snapshot(std::shared_ptr<const std::vector<CBlockIndex*>> chain)
+            : m_chain(std::move(chain)) {}
+
+    public:
+        /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
+        CBlockIndex* Genesis() const
+        {
+            return m_chain->size() > 0 ? (*m_chain)[0] : nullptr;
+        }
+
+        /** Returns the index entry for the tip of this chain, or nullptr if none. */
+        CBlockIndex* Tip() const
+        {
+            return m_chain->size() > 0 ? (*m_chain)[m_chain->size() - 1] : nullptr;
+        }
+
+        /** Returns the index entry at a particular height in this chain, or nullptr if no such height exists. */
+        CBlockIndex* operator[](int nHeight) const
+        {
+            if (nHeight < 0 || nHeight >= (int)m_chain->size())
+                return nullptr;
+            return (*m_chain)[nHeight];
+        }
+
+        /** Efficiently check whether a block is present in this chain. */
+        bool Contains(const CBlockIndex* index) const
+        {
+            return (*this)[index->nHeight] == index;
+        }
+
+        /** Find the successor of a block in this chain, or nullptr if the given index is not found or is the tip. */
+        CBlockIndex* Next(const CBlockIndex* index) const
+        {
+            if (Contains(index))
+                return (*this)[index->nHeight + 1];
+            else
+                return nullptr;
+        }
+
+        /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
+        int Height() const
+        {
+            return int(m_chain->size()) - 1;
+        }
+
+        /** Find the last common block between this chain and a block index entry. */
+        const CBlockIndex* FindFork(const CBlockIndex* index) const
+        {
+            if (index == nullptr) {
+                return nullptr;
+            }
+            if (index->nHeight > Height())
+                index = index->GetAncestor(Height());
+            while (index && !Contains(index))
+                index = index->pprev;
+            return index;
+        }
+
+        /** Find the earliest block with timestamp equal or greater than the given time and height equal or greater than the given height. */
+        CBlockIndex* FindEarliestAtLeast(int64_t nTime, int height) const
+        {
+            std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
+            std::vector<CBlockIndex*>::const_iterator lower = std::lower_bound(
+                m_chain->begin(), m_chain->end(), blockparams,
+                [](CBlockIndex* index, const std::pair<int64_t, int>& blockparams) -> bool {
+                    return index->GetBlockTimeMax() < blockparams.first || index->nHeight < blockparams.second;
+                });
+            return (lower == m_chain->end() ? nullptr : *lower);
+        }
+
+        size_t size() const
+        {
+            return m_chain->size();
+        }
+
+        bool empty() const
+        {
+            return m_chain->empty();
+        }
+    };
+
 private:
-    std::vector<CBlockIndex*> vChain;
+    std::shared_ptr<const std::vector<CBlockIndex*>> m_vChain;
+    mutable std::mutex m_update_mutex;
 
 public:
-    CChain() = default;
+    CChain() : m_vChain(std::make_shared<const std::vector<CBlockIndex*>>()) {}
     CChain(const CChain&) = delete;
     CChain& operator=(const CChain&) = delete;
+
+    /**
+     * Get a consistent snapshot of the chain.
+     *
+     * This is the primary interface for reading chain data. The returned snapshot
+     * provides a consistent view of the chain that will not change even if the
+     * chain is updated by other threads.
+     *
+     * This operation is lock-free and fast (just an atomic load + refcount increment).
+     *
+     * Prefer using GetSnapshot() for multiple operations to ensure consistency:
+     *   GOOD:
+     *     auto snap = chain.GetSnapshot();
+     *     int h = snap.Height();
+     *     CBlockIndex* t = snap.Tip();  // Guaranteed to match height
+     *
+     *   BAD (potential race):
+     *     int h = chain.Height();
+     *     CBlockIndex* t = chain.Tip();  // Might be from different chain state!
+     */
+    Snapshot GetSnapshot() const
+    {
+        return Snapshot(std::atomic_load(&m_vChain));
+    }
+
+    /**
+     * Legacy interface methods for backward compatibility.
+     *
+     * Note: These methods each get a fresh snapshot, so multiple calls may see
+     * inconsistent state if the chain is updated between calls. For operations
+     * that need consistency, use GetSnapshot() instead.
+     */
 
     /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
     CBlockIndex* Genesis() const
     {
-        return vChain.size() > 0 ? vChain[0] : nullptr;
+        return GetSnapshot().Genesis();
     }
 
     /** Returns the index entry for the tip of this chain, or nullptr if none. */
     CBlockIndex* Tip() const
     {
-        return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
+        return GetSnapshot().Tip();
     }
 
     /** Returns the index entry at a particular height in this chain, or nullptr if no such height exists. */
     CBlockIndex* operator[](int nHeight) const
     {
-        if (nHeight < 0 || nHeight >= (int)vChain.size())
-            return nullptr;
-        return vChain[nHeight];
+        return GetSnapshot()[nHeight];
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    bool Contains(const CBlockIndex* pindex) const
+    bool Contains(const CBlockIndex* index) const
     {
-        return (*this)[pindex->nHeight] == pindex;
+        return GetSnapshot().Contains(index);
     }
 
     /** Find the successor of a block in this chain, or nullptr if the given index is not found or is the tip. */
-    CBlockIndex* Next(const CBlockIndex* pindex) const
+    CBlockIndex* Next(const CBlockIndex* index) const
     {
-        if (Contains(pindex))
-            return (*this)[pindex->nHeight + 1];
-        else
-            return nullptr;
+        return GetSnapshot().Next(index);
     }
 
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
     int Height() const
     {
-        return int(vChain.size()) - 1;
+        return GetSnapshot().Height();
     }
 
     /** Set/initialize a chain with a given tip. */
