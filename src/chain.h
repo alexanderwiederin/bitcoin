@@ -12,6 +12,7 @@
 #include <kernel/cs_main.h>
 #include <primitives/block.h>
 #include <serialize.h>
+#include <stlab/copy_on_write.hpp>
 #include <sync.h>
 #include <uint256.h>
 #include <util/time.h>
@@ -376,48 +377,138 @@ public:
     std::string ToString() = delete;
 };
 
-/** An in-memory indexed chain of blocks. */
+/** An in-memory indexed chain of blocks.
+ *
+ * CChain is a regular type. It supports copy construction and assignment,
+ * providing value semantics. Copies share underlying data through
+ * copy-on-write, making them efficient.
+ *
+ * To get a snapshot, simply copy the CChain object:
+ *      CChain snapshot = original_chain;
+ * */
 class CChain
 {
 private:
-    std::vector<CBlockIndex*> vChain;
+    struct Impl {
+        stlab::copy_on_write<std::vector<CBlockIndex*>> base;
+        stlab::copy_on_write<std::vector<CBlockIndex*>> tail;
+
+        Impl() = default;
+
+        Impl(std::vector<CBlockIndex*> base_vec, std::vector<CBlockIndex*> tail_vec)
+            : base(std::move(base_vec)), tail(std::move(tail_vec)) {}
+    };
+
+    stlab::copy_on_write<Impl> m_impl;
+    mutable Mutex m_write_mutex;
+
+    static constexpr size_t MAX_TAIL_SIZE = 1000;
+
+    void HandleReorg(CBlockIndex& block)
+    {
+        std::vector<CBlockIndex*> new_base(block.nHeight + 1);
+        CBlockIndex* index = &block;
+        while (index && new_base[index->nHeight] != index) {
+            new_base[index->nHeight] = index;
+            index = index->pprev;
+        }
+
+        m_impl.write() = Impl(
+            std::move(new_base),
+            std::vector<CBlockIndex*>());
+    }
+
+    void MergeTailIntoBase(CBlockIndex& block)
+    {
+        auto& writable_impl = m_impl.write();
+
+        auto tail_read = writable_impl.tail.read();
+
+        auto& base_ref = writable_impl.base.write();
+        base_ref.reserve(base_ref.size() + tail_read.size() + 1);
+        base_ref.insert(base_ref.end(), tail_read.begin(), tail_read.end());
+        base_ref.push_back(&block);
+
+        writable_impl.tail.write().clear();
+    }
+
+    void AppendToTail(CBlockIndex& block)
+    {
+        auto& writable_impl = m_impl.write();
+        writable_impl.tail.write().push_back(&block);
+    }
+
 
 public:
     CChain() = default;
-    CChain(const CChain&) = delete;
-    CChain& operator=(const CChain&) = delete;
+
+    CChain(const CChain& other) : m_impl(other.m_impl) {}
+    CChain& operator=(const CChain& other)
+    {
+        if (this != &other) {
+            m_impl = other.m_impl;
+        }
+        return *this;
+    }
+
+    // Move operations are deleted because std::mutex is not moveable
+    CChain(CChain&&) = delete;
+    CChain& operator=(CChain&&) = delete;
 
     /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
     CBlockIndex* Genesis() const
     {
-        return vChain.size() > 0 ? vChain[0] : nullptr;
+        auto impl = m_impl.read();
+        auto& base = impl.base.read();
+        if (!base.empty()) return base[0];
+        auto& tail = impl.tail.read();
+        if (!tail.empty()) return tail[0];
+        return nullptr;
     }
 
     /** Returns the index entry for the tip of this chain, or nullptr if none. */
     CBlockIndex* Tip() const
     {
-        return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
+        auto impl = m_impl.read();
+        const auto& tail = impl.tail.read();
+        if (!tail.empty()) return tail.back();
+        auto base = impl.base.read();
+        if (!base.empty()) return base.back();
+        return nullptr;
     }
 
     /** Returns the index entry at a particular height in this chain, or nullptr if no such height exists. */
     CBlockIndex* operator[](int nHeight) const
     {
-        if (nHeight < 0 || nHeight >= (int)vChain.size())
-            return nullptr;
-        return vChain[nHeight];
+        if (nHeight < 0) return nullptr;
+
+        auto impl = m_impl.read();
+        auto base = impl.base.read();
+
+        if (nHeight < (int)base.size()) {
+            return base[nHeight];
+        }
+
+        size_t tail_idx = nHeight - base.size();
+        auto tail = impl.tail.read();
+        if (tail_idx < tail.size()) {
+            return tail[tail_idx];
+        }
+
+        return nullptr;
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    bool Contains(const CBlockIndex* pindex) const
+    bool Contains(const CBlockIndex* index) const
     {
-        return (*this)[pindex->nHeight] == pindex;
+        return (*this)[index->nHeight] == index;
     }
 
     /** Find the successor of a block in this chain, or nullptr if the given index is not found or is the tip. */
-    CBlockIndex* Next(const CBlockIndex* pindex) const
+    CBlockIndex* Next(const CBlockIndex* index) const
     {
-        if (Contains(pindex))
-            return (*this)[pindex->nHeight + 1];
+        if (Contains(index))
+            return (*this)[index->nHeight + 1];
         else
             return nullptr;
     }
@@ -425,7 +516,10 @@ public:
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
     int Height() const
     {
-        return int(vChain.size()) - 1;
+        auto impl = m_impl.read();
+        auto base = impl.base.read();
+        auto tail = impl.tail.read();
+        return int(base.size() + tail.size()) - 1;
     }
 
     /** Set/initialize a chain with a given tip. */

@@ -601,6 +601,16 @@ if(NOT TARGET Python3::Interpreter)
   )
 endif()
 
+include(FetchContent)
+FetchContent_Declare(
+  stlab-copy-on-write
+  GIT_REPOSITORY  https://github.com/stlab/stlab-copy-on-write.git
+  GIT_TAG         v1.1.0
+)
+FetchContent_MakeAvailable(stlab-copy-on-write)
+
+include_directories(SYSTEM ${stlab-copy-on-write_SOURCE_DIR}/include)
+
 target_compile_definitions(core_interface INTERFACE ${DEPENDS_COMPILE_DEFINITIONS})
 target_compile_definitions(core_interface_relwithdebinfo INTERFACE ${DEPENDS_COMPILE_DEFINITIONS_RELWITHDEBINFO})
 target_compile_definitions(core_interface_debug INTERFACE ${DEPENDS_COMPILE_DEFINITIONS_DEBUG})
