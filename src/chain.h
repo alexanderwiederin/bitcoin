@@ -17,8 +17,11 @@
 #include <util/time.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -372,44 +375,153 @@ public:
 class CChain
 {
 private:
-    std::vector<CBlockIndex*> vChain;
+    struct Impl {
+        std::shared_ptr<const std::vector<CBlockIndex*>> base;
+        std::shared_ptr<const std::vector<CBlockIndex*>> tail;
+    };
+
+    std::shared_ptr<const Impl> m_impl;
+    mutable std::mutex m_mutex;
+
+    static constexpr size_t MAX_TAIL_SIZE = 1000;
+
+    void HandleReorg(CBlockIndex& block)
+    {
+        auto old_impl = m_impl;
+
+        std::vector<CBlockIndex*> new_base(old_impl->base->begin(), old_impl->base->end());
+        new_base.insert(new_base.end(), old_impl->tail->begin(), old_impl->tail->end());
+        new_base.resize(block.nHeight + 1, nullptr);
+
+        CBlockIndex* index = &block;
+        while (index && new_base[index->nHeight] != index) {
+            new_base[index->nHeight] = index;
+            index = index->pprev;
+        }
+
+        m_impl = std::make_shared<const Impl>(
+                std::make_shared<const std::vector<CBlockIndex*>>(std::move(new_base)),
+                std::make_shared<const std::vector<CBlockIndex*>>()
+        );
+    }
+
+    void MergTailIntoBase(CBlockIndex& block)
+    {
+        auto old_impl = m_impl;
+
+        std::vector<CBlockIndex*> new_base;
+        new_base.reserve(old_impl->base->size() + old_impl->tail->size() + 1);
+        new_base.insert(new_base.end(), old_impl->base->begin(), old_impl->base->end());
+        new_base.insert(new_base.end(), old_impl->base->begin(), old_impl->base->end());
+        new_base.push_back(&block);
+
+        m_impl = std::make_shared<const Impl>(
+                std::make_shared<const std::vector<CBlockIndex*>>(std::move(new_base)),
+                std::make_shared<const std::vector<CBlockIndex*>>()
+        );
+    }
+
+    void AppendToTail(CBlockIndex& block)
+    {
+        auto old_impl = m_impl;
+
+        std::vector<CBlockIndex*> new_tail = *old_impl->tail;
+        new_tail.push_back(&block);
+
+        m_impl = std::make_shared<const Impl>(
+                old_impl->base,
+                std::make_shared<const std::vector<CBlockIndex*>>(std::move(new_tail))
+        );
+    }
+
 
 public:
-    CChain() = default;
-    CChain(const CChain&) = delete;
-    CChain& operator=(const CChain&) = delete;
+    CChain()
+        : m_impl(std::make_shared<const Impl>(
+                    std::make_shared<const std::vector<CBlockIndex*>>(),
+                    std::make_shared<const std::vector<CBlockIndex*>>())) {}
+
+    CChain(const CChain& other)
+    {
+        std::lock_guard<std::mutex> lock(other.m_mutex);
+        m_impl = other.m_impl;
+    }
+
+    CChain& operator=(const CChain& other)
+    {
+        if (this != &other) {
+            std::shared_ptr<const Impl> other_impl;
+            {
+                std::lock_guard<std::mutex> lock(other.m_mutex);
+                other_impl = other.m_impl;
+            }
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_impl = other_impl;
+            }
+        }
+        return *this;
+    }
 
     /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
     CBlockIndex* Genesis() const
     {
-        return vChain.size() > 0 ? vChain[0] : nullptr;
+        auto impl = [&]() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_impl;
+        }();
+
+        if (!impl->base->empty()) return (*impl->base)[0];
+        if (!impl->tail->empty()) return (*impl->tail)[0];
+        return nullptr;
     }
 
     /** Returns the index entry for the tip of this chain, or nullptr if none. */
     CBlockIndex* Tip() const
     {
-        return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
+        auto impl = [&]() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_impl;
+        }();
+
+        if (!impl->tail->empty()) return impl->tail->back();
+        if (!impl->base->empty()) return impl->base->back();
+        return nullptr;
     }
 
     /** Returns the index entry at a particular height in this chain, or nullptr if no such height exists. */
     CBlockIndex* operator[](int nHeight) const
     {
-        if (nHeight < 0 || nHeight >= (int)vChain.size())
-            return nullptr;
-        return vChain[nHeight];
+        auto impl = [&]() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_impl;
+        }();
+
+        if (nHeight < 0) return nullptr;
+
+        if (nHeight < (int)impl->base->size()) {
+            return (*impl->base)[nHeight];
+        }
+
+        size_t tail_idx = nHeight - impl->base->size();
+        if (tail_idx < impl->tail->size()) {
+            return (*impl->tail)[tail_idx];
+        }
+
+        return nullptr;
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    bool Contains(const CBlockIndex* pindex) const
+    bool Contains(const CBlockIndex* index) const
     {
-        return (*this)[pindex->nHeight] == pindex;
+        return (*this)[index->nHeight] == index;
     }
 
     /** Find the successor of a block in this chain, or nullptr if the given index is not found or is the tip. */
-    CBlockIndex* Next(const CBlockIndex* pindex) const
+    CBlockIndex* Next(const CBlockIndex* index) const
     {
-        if (Contains(pindex))
-            return (*this)[pindex->nHeight + 1];
+        if (Contains(index))
+            return (*this)[index->nHeight + 1];
         else
             return nullptr;
     }
@@ -417,7 +529,12 @@ public:
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
     int Height() const
     {
-        return int(vChain.size()) - 1;
+        auto impl = [&]() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_impl;
+        }();
+
+        return int(impl->base->size() + impl->tail->size()) - 1;
     }
 
     /** Set/initialize a chain with a given tip. */
@@ -428,6 +545,24 @@ public:
 
     /** Find the earliest block with timestamp equal or greater than the given time and height equal or greater than the given height. */
     CBlockIndex* FindEarliestAtLeast(int64_t nTime, int height) const;
+
+    size_t size() const
+    {
+        auto impl = [&]() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_impl;
+        }();
+        return impl->base->size() + impl->tail->size();
+    }
+
+    bool empty() const
+    {
+        auto impl = [&]() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_impl;
+        }();
+        return impl->base->empty() && impl->tail->empty();
+    }
 };
 
 /** Get a locator for a block index entry. */

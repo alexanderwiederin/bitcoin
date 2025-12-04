@@ -7,6 +7,10 @@
 #include <tinyformat.h>
 #include <util/check.h>
 
+#include <algorithm>
+#include <mutex>
+#include <vector>
+
 std::string CBlockIndex::ToString() const
 {
     return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
@@ -15,12 +19,28 @@ std::string CBlockIndex::ToString() const
 
 void CChain::SetTip(CBlockIndex& block)
 {
-    CBlockIndex* pindex = &block;
-    vChain.resize(pindex->nHeight + 1);
-    while (pindex && vChain[pindex->nHeight] != pindex) {
-        vChain[pindex->nHeight] = pindex;
-        pindex = pindex->pprev;
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    auto old_impl = m_impl;
+
+    CBlockIndex* old_tip = old_impl->tail->empty() ?
+                               (old_impl->base->empty() ? nullptr : old_impl->base->back()) :
+                               old_impl->tail->back();
+
+    int old_height = old_tip ? old_tip->nHeight : -1;
+    bool is_sequential = (block.nHeight == old_height + 1 && block.pprev == old_tip);
+
+    if (!is_sequential) {
+        HandleReorg(block);
+        return;
     }
+
+    if (old_impl->tail->size() + 1 >= MAX_TAIL_SIZE) {
+        MergTailIntoBase(block);
+        return;
+    }
+
+    AppendToTail(block);
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)
@@ -47,23 +67,61 @@ CBlockLocator GetLocator(const CBlockIndex* index)
     return CBlockLocator{LocatorEntries(index)};
 }
 
-const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
-    if (pindex == nullptr) {
+const CBlockIndex* CChain::FindFork(const CBlockIndex* index) const
+{
+    if (index == nullptr) {
         return nullptr;
     }
-    if (pindex->nHeight > Height())
-        pindex = pindex->GetAncestor(Height());
-    while (pindex && !Contains(pindex))
-        pindex = pindex->pprev;
-    return pindex;
+    auto impl = [&]() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_impl;
+    }();
+
+    int height = int(impl->base->size() + impl->tail->size()) - 1;
+    if (index->nHeight > height)
+        index = index->GetAncestor(height);
+
+    while (index) {
+        CBlockIndex* chain_block = nullptr;
+        if (index->nHeight < (int)impl->base->size()) {
+            chain_block = (*impl->base)[index->nHeight];
+        } else {
+            size_t tail_idx = index->nHeight - impl->base->size();
+            if (tail_idx < impl->tail->size()) {
+                chain_block = (*impl->tail)[tail_idx];
+            }
+        }
+
+        if (chain_block == index) return index;
+        index = index->pprev;
+    }
+    return nullptr;
 }
 
 CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
 {
+    auto impl = [&]() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_impl;
+    }();
+
     std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
-    std::vector<CBlockIndex*>::const_iterator lower = std::lower_bound(vChain.begin(), vChain.end(), blockparams,
-        [](CBlockIndex* pBlock, const std::pair<int64_t, int>& blockparams) -> bool { return pBlock->GetBlockTimeMax() < blockparams.first || pBlock->nHeight < blockparams.second; });
-    return (lower == vChain.end() ? nullptr : *lower);
+
+    auto lower_base = std::lower_bound(impl->base->begin(), impl->base->end(), blockparams,
+                                       [](CBlockIndex* block, const std::pair<int64_t, int>& blockparams) -> bool {
+                                           return block->GetBlockTimeMax() < blockparams.first || block->nHeight < blockparams.second;
+                                       });
+
+    if (lower_base != impl->base->end()) {
+        return *lower_base;
+    }
+
+    auto lower_tail = std::lower_bound(impl->tail->begin(), impl->tail->end(), blockparams,
+                                       [](CBlockIndex* block, const std::pair<int64_t, int>& blockparams) -> bool {
+                                           return block->GetBlockTimeMax() < blockparams.first || block->nHeight < blockparams.second;
+                                       });
+
+    return (lower_tail == impl->tail->end() ? nullptr : *lower_tail);
 }
 
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */
