@@ -7,6 +7,9 @@
 #include <tinyformat.h>
 #include <util/check.h>
 
+#include <algorithm>
+#include <vector>
+
 std::string CBlockIndex::ToString() const
 {
     return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
@@ -15,12 +18,29 @@ std::string CBlockIndex::ToString() const
 
 void CChain::SetTip(CBlockIndex& block)
 {
-    CBlockIndex* pindex = &block;
-    vChain.resize(pindex->nHeight + 1);
-    while (pindex && vChain[pindex->nHeight] != pindex) {
-        vChain[pindex->nHeight] = pindex;
-        pindex = pindex->pprev;
+    std::lock_guard<std::mutex> lock(m_write_mutex);
+    const auto& old_snapshot = m_snapshot.read();
+    const auto& old_base = old_snapshot.m_base;
+    const auto& old_tail = old_snapshot.m_tail;
+
+    CBlockIndex* old_tip = old_tail.empty() ?
+                               (old_base.empty() ? nullptr : old_base.back()) :
+                               old_tail.back();
+
+    int old_height = old_tip ? old_tip->nHeight : -1;
+    bool is_sequential = (block.nHeight == old_height + 1 && block.pprev == old_tip);
+
+    if (!is_sequential) {
+        HandleReorg(block);
+        return;
     }
+
+    if (old_tail.size() + 1 >= MAX_TAIL_SIZE) {
+        MergTailIntoBase(block);
+        return;
+    }
+
+    AppendToTail(block);
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)
@@ -47,23 +67,36 @@ CBlockLocator GetLocator(const CBlockIndex* index)
     return CBlockLocator{LocatorEntries(index)};
 }
 
-const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
-    if (pindex == nullptr) {
-        return nullptr;
+const CBlockIndex* CChain::FindFork(const CBlockIndex* index) const
+{
+    return GetSnapshot().FindFork(index);
+}
+
+CBlockIndex* CChain::Snapshot::FindEarliestAtLeast(int64_t nTime, int height) const
+{
+    std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
+
+    // Search in base first
+    auto lower_base = std::lower_bound(m_base.begin(), m_base.end(), blockparams,
+                                       [](CBlockIndex* block, const std::pair<int64_t, int>& blockparams) -> bool {
+                                           return block->GetBlockTimeMax() < blockparams.first || block->nHeight < blockparams.second;
+                                       });
+
+    if (lower_base != m_base.end()) {
+        return *lower_base;
     }
-    if (pindex->nHeight > Height())
-        pindex = pindex->GetAncestor(Height());
-    while (pindex && !Contains(pindex))
-        pindex = pindex->pprev;
-    return pindex;
+
+    auto lower_tail = std::lower_bound(m_tail.begin(), m_tail.end(), blockparams,
+                                       [](CBlockIndex* block, const std::pair<int64_t, int>& blockparams) -> bool {
+                                           return block->GetBlockTimeMax() < blockparams.first || block->nHeight < blockparams.second;
+                                       });
+
+    return (lower_tail == m_tail.end() ? nullptr : *lower_tail);
 }
 
 CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
 {
-    std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
-    std::vector<CBlockIndex*>::const_iterator lower = std::lower_bound(vChain.begin(), vChain.end(), blockparams,
-        [](CBlockIndex* pBlock, const std::pair<int64_t, int>& blockparams) -> bool { return pBlock->GetBlockTimeMax() < blockparams.first || pBlock->nHeight < blockparams.second; });
-    return (lower == vChain.end() ? nullptr : *lower);
+    return GetSnapshot().FindEarliestAtLeast(nTime, height);
 }
 
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */
