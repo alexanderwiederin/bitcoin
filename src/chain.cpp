@@ -4,8 +4,13 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chain.h>
+#include <logging.h>
 #include <tinyformat.h>
 #include <util/check.h>
+#include <algorithm>
+#include <memory>
+#include <mutex>
+#include <vector>
 
 std::string CBlockIndex::ToString() const
 {
@@ -15,12 +20,53 @@ std::string CBlockIndex::ToString() const
 
 void CChain::SetTip(CBlockIndex& block)
 {
-    CBlockIndex* pindex = &block;
-    vChain.resize(pindex->nHeight + 1);
-    while (pindex && vChain[pindex->nHeight] != pindex) {
-        vChain[pindex->nHeight] = pindex;
-        pindex = pindex->pprev;
+    std::lock_guard<std::mutex> lock(m_update_mutex);
+
+    auto old_base = std::atomic_load(&m_base);
+    auto old_tail = std::atomic_load(&m_tail);
+
+    int old_height = old_base->size() + old_tail->size() - 1;
+    CBlockIndex* current_tip = old_tail->empty() ?
+                                   (old_base->empty() ? nullptr : old_base->back()) :
+                                   old_tail->back();
+
+    // Fast path: sequential block addition
+    if (block.nHeight == old_height + 1 && block.pprev == current_tip) {
+        std::vector<CBlockIndex*> new_tail = *old_tail;
+        new_tail.push_back(&block);
+
+        if (new_tail.size() >= MAX_TAIL_SIZE) {
+            std::vector<CBlockIndex*> new_base;
+            new_base.reserve(old_base->size() + new_tail.size());
+            new_base.insert(new_base.end(), old_base->begin(), old_base->end());
+            new_base.insert(new_base.end(), new_tail.begin(), new_tail.end());
+
+            LogInfo("Merging tail into base: old_base_size=%d, tail_size=%d, new_base_size=%d\n",
+                    old_base->size(), old_tail->size(), new_base.size());
+
+            std::atomic_store(&m_base, std::make_shared<const std::vector<CBlockIndex*>>(std::move(new_base)));
+            std::atomic_store(&m_tail, std::make_shared<const std::vector<CBlockIndex*>>());
+        } else {
+            std::atomic_store(&m_tail, std::make_shared<const std::vector<CBlockIndex*>>(std::move(new_tail)));
+        }
+
+        return;
     }
+
+    // Slow path: reorg or out-of-order (rebuild entire chain)
+    std::vector<CBlockIndex*> new_base(block.nHeight + 1);
+
+    CBlockIndex* index = &block;
+    while (index && new_base[index->nHeight] != index) {
+        new_base[index->nHeight] = index;
+        index = index->pprev;
+    }
+
+    LogInfo("Chain reorganization: rebuilding base with height=%d\n", block.nHeight);
+
+
+    std::atomic_store(&m_base, std::make_shared<const std::vector<CBlockIndex*>>(std::move(new_base)));
+    std::atomic_store(&m_tail, std::make_shared<const std::vector<CBlockIndex*>>());
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)
@@ -47,23 +93,36 @@ CBlockLocator GetLocator(const CBlockIndex* index)
     return CBlockLocator{LocatorEntries(index)};
 }
 
-const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
-    if (pindex == nullptr) {
-        return nullptr;
+const CBlockIndex* CChain::FindFork(const CBlockIndex* index) const
+{
+    return GetSnapshot().FindFork(index);
+}
+
+CBlockIndex* CChain::Snapshot::FindEarliestAtLeast(int64_t nTime, int height) const
+{
+    std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
+
+    // Search in base first
+    auto lower_base = std::lower_bound(m_base->begin(), m_base->end(), blockparams,
+                                       [](CBlockIndex* block, const std::pair<int64_t, int>& blockparams) -> bool {
+                                           return block->GetBlockTimeMax() < blockparams.first || block->nHeight < blockparams.second;
+                                       });
+
+    if (lower_base != m_base->end()) {
+        return *lower_base;
     }
-    if (pindex->nHeight > Height())
-        pindex = pindex->GetAncestor(Height());
-    while (pindex && !Contains(pindex))
-        pindex = pindex->pprev;
-    return pindex;
+
+    auto lower_tail = std::lower_bound(m_tail->begin(), m_tail->end(), blockparams,
+                                       [](CBlockIndex* block, const std::pair<int64_t, int>& blockparams) -> bool {
+                                           return block->GetBlockTimeMax() < blockparams.first || block->nHeight < blockparams.second;
+                                       });
+
+    return (lower_tail == m_tail->end() ? nullptr : *lower_tail);
 }
 
 CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
 {
-    std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
-    std::vector<CBlockIndex*>::const_iterator lower = std::lower_bound(vChain.begin(), vChain.end(), blockparams,
-        [](CBlockIndex* pBlock, const std::pair<int64_t, int>& blockparams) -> bool { return pBlock->GetBlockTimeMax() < blockparams.first || pBlock->nHeight < blockparams.second; });
-    return (lower == vChain.end() ? nullptr : *lower);
+    return GetSnapshot().FindEarliestAtLeast(nTime, height);
 }
 
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */
