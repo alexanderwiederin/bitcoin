@@ -123,20 +123,22 @@ const CBlockIndex* Chainstate::FindForkInGlobalIndex(const CBlockLocator& locato
 {
     AssertLockHeld(cs_main);
 
+    auto snapshot = m_chain.GetSnapshot();
+
     // Find the latest block common to locator and chain - we expect that
     // locator.vHave is sorted descending by height.
     for (const uint256& hash : locator.vHave) {
         const CBlockIndex* pindex{m_blockman.LookupBlockIndex(hash)};
         if (pindex) {
-            if (m_chain.Contains(pindex)) {
+            if (snapshot.Contains(pindex)) {
                 return pindex;
             }
-            if (pindex->GetAncestor(m_chain.Height()) == m_chain.Tip()) {
-                return m_chain.Tip();
+            if (pindex->GetAncestor(snapshot.Height()) == snapshot.Tip()) {
+                return snapshot.Tip();
             }
         }
     }
-    return m_chain.Genesis();
+    return snapshot.Genesis();
 }
 
 bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
