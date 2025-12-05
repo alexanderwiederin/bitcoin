@@ -3564,15 +3564,16 @@ bool Chainstate::PreciousBlock(BlockValidationState& state, CBlockIndex* pindex)
     AssertLockNotHeld(::cs_main);
     {
         LOCK(cs_main);
-        if (pindex->nChainWork < m_chain.Tip()->nChainWork) {
+        auto snapshot = m_chain.GetSnapshot();
+        if (pindex->nChainWork < snapshot.Tip()->nChainWork) {
             // Nothing to do, this block is not at the tip.
             return true;
         }
-        if (m_chain.Tip()->nChainWork > m_chainman.nLastPreciousChainwork) {
+        if (snapshot.Tip()->nChainWork > m_chainman.nLastPreciousChainwork) {
             // The chain has been extended since the last call, reset the counter.
             m_chainman.nBlockReverseSequenceId = -1;
         }
-        m_chainman.nLastPreciousChainwork = m_chain.Tip()->nChainWork;
+        m_chainman.nLastPreciousChainwork = snapshot.Tip()->nChainWork;
         setBlockIndexCandidates.erase(pindex);
         pindex->nSequenceId = m_chainman.nBlockReverseSequenceId;
         if (m_chainman.nBlockReverseSequenceId > std::numeric_limits<int32_t>::min()) {
