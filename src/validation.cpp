@@ -3264,10 +3264,13 @@ CBlockIndex* Chainstate::FindMostWorkChain()
 
 /** Delete all entries in setBlockIndexCandidates that are worse than the current tip. */
 void Chainstate::PruneBlockIndexCandidates() {
+    auto snapshot = m_chain.GetSnapshot();
+    CBlockIndex* tip = snapshot.Tip();
+
     // Note that we can't delete the current block itself, as we may need to return to it later in case a
     // reorganization to a better block fails.
     std::set<CBlockIndex*, CBlockIndexWorkComparator>::iterator it = setBlockIndexCandidates.begin();
-    while (it != setBlockIndexCandidates.end() && setBlockIndexCandidates.value_comp()(*it, m_chain.Tip())) {
+    while (it != setBlockIndexCandidates.end() && setBlockIndexCandidates.value_comp()(*it, tip)) {
         setBlockIndexCandidates.erase(it++);
     }
     // Either the current tip or a successor of it we're working towards is left in setBlockIndexCandidates.
