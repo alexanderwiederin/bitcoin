@@ -418,7 +418,9 @@ private:
             index = index->pprev;
         }
 
-        m_impl.write() = Impl(std::move(new_base), std::vector<CBlockIndex*>());
+        auto& impl = m_impl.write();
+        impl.base = std::move(new_base);
+        impl.tail = std::vector<CBlockIndex*>();
     }
 
     void MergeTailIntoBase(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
@@ -428,7 +430,9 @@ private:
         new_base.insert(new_base.end(), tail.begin(), tail.end());
         new_base.push_back(&block);
 
-        m_impl.write() = Impl(std::move(new_base), std::vector<CBlockIndex*>());
+        auto& impl = m_impl.write();
+        impl.base = std::move(new_base);
+        impl.tail = std::vector<CBlockIndex*>();
     }
 
     void AppendToTail(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
@@ -436,7 +440,8 @@ private:
         std::vector<CBlockIndex*> new_tail(tail.begin(), tail.end());
         new_tail.push_back(&block);
 
-        m_impl.write() = Impl(base, std::move(new_tail));
+        auto& impl = m_impl.write();
+        impl.tail = std::move(new_tail);
     }
 
 public:
