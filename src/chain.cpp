@@ -32,7 +32,7 @@ void CChain::SetTip(CBlockIndex& block)
     bool is_sequential = (block.nHeight == old_height + 1 && block.pprev == old_tip);
 
     if (!is_sequential) {
-        HandleReorg(block);
+        HandleReorg(base, tail, block);
         return;
     }
 

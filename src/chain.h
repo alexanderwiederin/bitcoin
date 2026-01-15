@@ -405,18 +405,20 @@ private:
 
     static constexpr size_t MAX_TAIL_SIZE = 1000;
 
-    void HandleReorg(CBlockIndex& block)
+    void HandleReorg(const std::vector<CBlockIndex*>& old_base,
+                 const std::vector<CBlockIndex*>& old_tail,
+                 CBlockIndex& block)
     {
-        std::vector<CBlockIndex*> new_base(block.nHeight + 1);
+        std::vector<CBlockIndex*> new_base = std::vector<CBlockIndex*>(old_base.begin(), old_base.end());
+        new_base.resize(block.nHeight + 1, nullptr);
+
         CBlockIndex* index = &block;
         while (index && new_base[index->nHeight] != index) {
             new_base[index->nHeight] = index;
             index = index->pprev;
         }
 
-        m_impl.write() = Impl(
-            std::move(new_base),
-            std::vector<CBlockIndex*>());
+        m_impl.write() = Impl(std::move(new_base), std::vector<CBlockIndex*>());
     }
 
     void MergeTailIntoBase(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
