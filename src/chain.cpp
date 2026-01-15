@@ -37,11 +37,11 @@ void CChain::SetTip(CBlockIndex& block)
     }
 
     if (tail.size() + 1 >= MAX_TAIL_SIZE) {
-        MergeTailIntoBase(block);
+        MergeTailIntoBase(base, tail, block);
         return;
     }
 
-    AppendToTail(block);
+    AppendToTail(base, tail, block);
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)

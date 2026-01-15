@@ -21,6 +21,7 @@
 #include <cassert>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 /**
@@ -418,26 +419,23 @@ private:
             std::vector<CBlockIndex*>());
     }
 
-    void MergeTailIntoBase(CBlockIndex& block)
+    void MergeTailIntoBase(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
     {
-        auto& writable_impl = m_impl.write();
+        std::vector<CBlockIndex*> new_base(base.begin(), base.end());
+        new_base.reserve(new_base.size() + tail.size() + 1);
+        new_base.insert(new_base.end(), tail.begin(), tail.end());
+        new_base.push_back(&block);
 
-        auto tail_read = writable_impl.tail.read();
-
-        auto& base_ref = writable_impl.base.write();
-        base_ref.reserve(base_ref.size() + tail_read.size() + 1);
-        base_ref.insert(base_ref.end(), tail_read.begin(), tail_read.end());
-        base_ref.push_back(&block);
-
-        writable_impl.tail.write().clear();
+        m_impl.write() = Impl(std::move(new_base), std::vector<CBlockIndex*>());
     }
 
-    void AppendToTail(CBlockIndex& block)
+    void AppendToTail(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
     {
-        auto& writable_impl = m_impl.write();
-        writable_impl.tail.write().push_back(&block);
-    }
+        std::vector<CBlockIndex*> new_tail(tail.begin(), tail.end());
+        new_tail.push_back(&block);
 
+        m_impl.write() = Impl(base, std::move(new_tail));
+    }
 
 public:
     CChain() = default;
