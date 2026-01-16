@@ -20,9 +20,9 @@ void CChain::SetTip(CBlockIndex& block)
 {
     std::lock_guard<std::mutex> lock(m_write_mutex);
 
-    auto impl = m_impl.read();
-    auto base = impl.base.read();
-    auto tail = impl.tail.read();
+    auto& impl = m_impl.write();
+    const auto& base = impl.base.read();
+    const auto& tail = impl.tail.read();
 
     CBlockIndex* old_tip = tail.empty() ?
                                (base.empty() ? nullptr : base.back()) :
@@ -32,16 +32,16 @@ void CChain::SetTip(CBlockIndex& block)
     bool is_sequential = (block.nHeight == old_height + 1 && block.pprev == old_tip);
 
     if (!is_sequential) {
-        HandleReorg(base, tail, block);
+        HandleReorg(impl, base, tail, block);
         return;
     }
 
     if (tail.size() + 1 >= MAX_TAIL_SIZE) {
-        MergeTailIntoBase(base, tail, block);
+        MergeTailIntoBase(impl, base, tail, block);
         return;
     }
 
-    AppendToTail(base, tail, block);
+    AppendToTail(impl, base, tail, block);
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)

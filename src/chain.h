@@ -405,9 +405,10 @@ private:
 
     static constexpr size_t MAX_TAIL_SIZE = 1000;
 
-    void HandleReorg(const std::vector<CBlockIndex*>& old_base,
-                 const std::vector<CBlockIndex*>& old_tail,
-                 CBlockIndex& block)
+    void HandleReorg(Impl& impl,
+                     const std::vector<CBlockIndex*>& old_base,
+                     const std::vector<CBlockIndex*>& old_tail,
+                     CBlockIndex& block)
     {
         std::vector<CBlockIndex*> new_base = std::vector<CBlockIndex*>(old_base.begin(), old_base.end());
         new_base.resize(block.nHeight + 1, nullptr);
@@ -418,29 +419,26 @@ private:
             index = index->pprev;
         }
 
-        auto& impl = m_impl.write();
         impl.base = std::move(new_base);
         impl.tail = std::vector<CBlockIndex*>();
     }
 
-    void MergeTailIntoBase(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
+    void MergeTailIntoBase(Impl& impl, const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
     {
         std::vector<CBlockIndex*> new_base(base.begin(), base.end());
         new_base.reserve(new_base.size() + tail.size() + 1);
         new_base.insert(new_base.end(), tail.begin(), tail.end());
         new_base.push_back(&block);
 
-        auto& impl = m_impl.write();
         impl.base = std::move(new_base);
         impl.tail = std::vector<CBlockIndex*>();
     }
 
-    void AppendToTail(const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
+    void AppendToTail(Impl& impl, const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
     {
         std::vector<CBlockIndex*> new_tail(tail.begin(), tail.end());
         new_tail.push_back(&block);
 
-        auto& impl = m_impl.write();
         impl.tail = std::move(new_tail);
     }
 
