@@ -73,11 +73,31 @@ const CBlockIndex* CChain::FindFork(const CBlockIndex* index) const
     if (index == nullptr) {
         return nullptr;
     }
-    if (index->nHeight > Height())
-        index = index->GetAncestor(Height());
-    while (index && !Contains(index))
+    auto impl = m_impl.read();
+    auto base = impl.base.read();
+    auto tail = impl.tail.read();
+
+    int height = int(base.size() + tail.size()) - 1;
+
+    if (index->nHeight > height)
+        index = index->GetAncestor(height);
+
+    while (index) {
+        CBlockIndex* chain_block = nullptr;
+        if (index->nHeight < (int)base.size()) {
+            chain_block = base[index->nHeight];
+        } else {
+            size_t tail_idx = index->nHeight - base.size();
+            if (tail_idx < tail.size()) {
+                chain_block = tail[tail_idx];
+            }
+        }
+
+        if (chain_block == index) return index;
         index = index->pprev;
-    return index;
+    }
+
+    return nullptr;
 }
 
 CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
