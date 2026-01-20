@@ -406,11 +406,9 @@ private:
     static constexpr size_t MAX_TAIL_SIZE = 1000;
 
     void HandleReorg(Impl& impl,
-                     const std::vector<CBlockIndex*>& old_base,
-                     const std::vector<CBlockIndex*>& old_tail,
                      CBlockIndex& block)
     {
-        std::vector<CBlockIndex*> new_base = std::vector<CBlockIndex*>(old_base.begin(), old_base.end());
+        auto& new_base = impl.base.write();
         new_base.resize(block.nHeight + 1, nullptr);
 
         CBlockIndex* index = &block;
@@ -419,7 +417,6 @@ private:
             index = index->pprev;
         }
 
-        impl.base = std::move(new_base);
         impl.tail = std::vector<CBlockIndex*>();
     }
 
