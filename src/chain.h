@@ -434,12 +434,10 @@ private:
         impl.tail = std::vector<CBlockIndex*>();
     }
 
-    void AppendToTail(Impl& impl, const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
+    void AppendToTail(Impl& impl, CBlockIndex& block)
     {
-        std::vector<CBlockIndex*> new_tail(tail.begin(), tail.end());
-        new_tail.push_back(&block);
-
-        impl.tail = std::move(new_tail);
+        auto& tail_vec = impl.tail.write();
+        tail_vec.push_back(&block);
     }
 
 public:

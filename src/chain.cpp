@@ -41,7 +41,7 @@ void CChain::SetTip(CBlockIndex& block)
         return;
     }
 
-    AppendToTail(impl, base, tail, block);
+    AppendToTail(impl, block);
 }
 
 std::vector<uint256> LocatorEntries(const CBlockIndex* index)
