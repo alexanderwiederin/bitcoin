@@ -621,12 +621,14 @@ static RPCHelpMan getblockheader()
         fVerbose = request.params[1].get_bool();
 
     const CBlockIndex* pblockindex;
-    const CBlockIndex* tip;
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
+
+    CChain active_chain = chainman.ActiveChainSnapshot();
+    const CBlockIndex* tip = active_chain.Tip();
+
     {
         LOCK(cs_main);
         pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
-        tip = chainman.ActiveChain().Tip();
     }
 
     if (!pblockindex) {
