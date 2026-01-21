@@ -481,8 +481,7 @@ static RPCHelpMan getdifficulty()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
-    return GetDifficulty(*CHECK_NONFATAL(chainman.ActiveChain().Tip()));
+    return GetDifficulty(*CHECK_NONFATAL(chainman.ActiveChainSnapshot().Tip()));
 },
     };
 }
