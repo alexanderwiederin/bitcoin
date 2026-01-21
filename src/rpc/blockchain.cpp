@@ -238,8 +238,7 @@ static RPCHelpMan getblockcount()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
-    return chainman.ActiveChain().Height();
+    return chainman.ActiveChainSnapshot().Height();
 },
     };
 }
