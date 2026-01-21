@@ -898,9 +898,7 @@ static RPCHelpMan pruneblockchain()
         throw JSONRPCError(RPC_MISC_ERROR, "Cannot prune blocks because node is not in prune mode.");
     }
 
-    LOCK(cs_main);
-    Chainstate& active_chainstate = chainman.ActiveChainstate();
-    CChain& active_chain = active_chainstate.m_chain;
+    CChain active_chain = chainman.ActiveChainSnapshot();
 
     int heightParam = request.params[0].getInt<int>();
     if (heightParam < 0) {
@@ -929,6 +927,8 @@ static RPCHelpMan pruneblockchain()
         height = chainHeight - MIN_BLOCKS_TO_KEEP;
     }
 
+    LOCK(cs_main);
+    Chainstate& active_chainstate = chainman.ActiveChainstate();
     PruneBlockFilesManual(active_chainstate, height);
     return GetPruneHeight(chainman.m_blockman, active_chain).value_or(-1);
 },
