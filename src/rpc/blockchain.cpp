@@ -559,8 +559,7 @@ static RPCHelpMan getblockhash()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
-    const CChain& active_chain = chainman.ActiveChain();
+    const CChain active_chain = chainman.ActiveChainSnapshot();
 
     int nHeight = request.params[0].getInt<int>();
     if (nHeight < 0 || nHeight > active_chain.Height())
