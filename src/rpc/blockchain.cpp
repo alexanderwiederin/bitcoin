@@ -1791,10 +1791,10 @@ static RPCHelpMan getchaintxstats()
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
     const CBlockIndex* pindex;
     int blockcount = 30 * 24 * 60 * 60 / chainman.GetParams().GetConsensus().nPowTargetSpacing; // By default: 1 month
+    CChain active_chain = chainman.ActiveChainSnapshot();
 
     if (request.params[1].isNull()) {
-        LOCK(cs_main);
-        pindex = chainman.ActiveChain().Tip();
+        pindex = active_chain.Tip();
     } else {
         uint256 hash(ParseHashV(request.params[1], "blockhash"));
         LOCK(cs_main);
@@ -1802,7 +1802,7 @@ static RPCHelpMan getchaintxstats()
         if (!pindex) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         }
-        if (!chainman.ActiveChain().Contains(pindex)) {
+        if (!active_chain.Contains(pindex)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Block is not in main chain");
         }
     }
