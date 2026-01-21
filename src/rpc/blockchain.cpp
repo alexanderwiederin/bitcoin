@@ -814,12 +814,14 @@ static RPCHelpMan getblock()
     int verbosity{ParseVerbosity(request.params[1], /*default_verbosity=*/1, /*allow_bool=*/true)};
 
     const CBlockIndex* pblockindex;
-    const CBlockIndex* tip;
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
+
+    CChain active_chain = chainman.ActiveChainSnapshot();
+    const CBlockIndex* tip = active_chain.Tip();
+
     {
         LOCK(cs_main);
         pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
-        tip = chainman.ActiveChain().Tip();
 
         if (!pblockindex) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
