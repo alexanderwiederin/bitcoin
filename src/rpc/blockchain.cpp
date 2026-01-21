@@ -1556,8 +1556,7 @@ static RPCHelpMan getchaintips()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
-    CChain& active_chain = chainman.ActiveChain();
+    CChain active_chain = chainman.ActiveChainSnapshot();
 
     /*
      * Idea: The set of chain tips is the active chain tip, plus orphan blocks which do not have another orphan building off of them.
@@ -1570,6 +1569,7 @@ static RPCHelpMan getchaintips()
     std::set<const CBlockIndex*> setOrphans;
     std::set<const CBlockIndex*> setPrevs;
 
+    LOCK(cs_main);
     for (const auto& [_, block_index] : chainman.BlockIndex()) {
         if (!active_chain.Contains(&block_index)) {
             setOrphans.insert(&block_index);
