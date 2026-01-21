@@ -258,8 +258,7 @@ static RPCHelpMan getbestblockhash()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
-    return chainman.ActiveChain().Tip()->GetBlockHash().GetHex();
+    return chainman.ActiveChainSnapshot().Tip()->GetBlockHash().GetHex();
 },
     };
 }
