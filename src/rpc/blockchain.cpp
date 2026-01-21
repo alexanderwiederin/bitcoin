@@ -125,8 +125,7 @@ static int ComputeNextBlockAndDepth(const CBlockIndex& tip, const CBlockIndex& b
 
 static const CBlockIndex* ParseHashOrHeight(const UniValue& param, ChainstateManager& chainman)
 {
-    LOCK(::cs_main);
-    CChain& active_chain = chainman.ActiveChain();
+    CChain active_chain = chainman.ActiveChainSnapshot();
 
     if (param.isNum()) {
         const int height{param.getInt<int>()};
@@ -141,6 +140,7 @@ static const CBlockIndex* ParseHashOrHeight(const UniValue& param, ChainstateMan
         return active_chain[height];
     } else {
         const uint256 hash{ParseHashV(param, "hash_or_height")};
+        LOCK(::cs_main);
         const CBlockIndex* pindex = chainman.m_blockman.LookupBlockIndex(hash);
 
         if (!pindex) {
