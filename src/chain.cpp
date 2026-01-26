@@ -21,23 +21,18 @@ void CChain::SetTip(CBlockIndex& block)
 {
     std::lock_guard<std::mutex> lock(m_write_mutex);
 
-    auto& impl = m_impl.write();
-    const auto& base = impl.base.read();
-    const auto& tail = impl.tail;
-
-    CBlockIndex* old_tip = tail.empty() ?
-                               (base.empty() ? nullptr : base.back()) :
-                               tail.back();
-
+    CBlockIndex* old_tip = Tip();
     int old_height = old_tip ? old_tip->nHeight : -1;
     bool is_sequential = (block.nHeight == old_height + 1 && block.pprev == old_tip);
+
+    auto& impl = m_impl.write();
 
     if (!is_sequential) {
         HandleReorg(impl, block);
         return;
     }
 
-    if (tail.size() + 1 >= MAX_TAIL_SIZE) {
+    if (impl.tail.size() + 1 >= MAX_TAIL_SIZE) {
         MergeTailIntoBase(impl, block);
         return;
     }
