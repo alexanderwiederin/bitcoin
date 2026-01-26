@@ -417,7 +417,7 @@ private:
             index = index->pprev;
         }
 
-        impl.tail = std::vector<CBlockIndex*>();
+        impl.tail.clear();
     }
 
     void MergeTailIntoBase(Impl& impl, CBlockIndex& block)
