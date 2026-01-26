@@ -38,7 +38,7 @@ void CChain::SetTip(CBlockIndex& block)
     }
 
     if (tail.size() + 1 >= MAX_TAIL_SIZE) {
-        MergeTailIntoBase(impl, base, tail, block);
+        MergeTailIntoBase(impl, block);
         return;
     }
 

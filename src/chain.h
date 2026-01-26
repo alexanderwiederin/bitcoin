@@ -420,15 +420,14 @@ private:
         impl.tail = std::vector<CBlockIndex*>();
     }
 
-    void MergeTailIntoBase(Impl& impl, const std::vector<CBlockIndex*>& base, const std::vector<CBlockIndex*>& tail, CBlockIndex& block)
+    void MergeTailIntoBase(Impl& impl, CBlockIndex& block)
     {
-        std::vector<CBlockIndex*> new_base(base.begin(), base.end());
-        new_base.reserve(new_base.size() + tail.size() + 1);
-        new_base.insert(new_base.end(), tail.begin(), tail.end());
-        new_base.push_back(&block);
+        auto& mutable_base = impl.base.write();
+        mutable_base.reserve(mutable_base.size() + impl.tail.size() + 1);
+        mutable_base.insert(mutable_base.end(), impl.tail.begin(), impl.tail.end());
+        mutable_base.push_back(&block);
 
-        impl.base = std::move(new_base);
-        impl.tail = std::vector<CBlockIndex*>();
+        impl.tail.clear();
     }
 
     void AppendToTail(Impl& impl, CBlockIndex& block)
