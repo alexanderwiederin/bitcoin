@@ -1152,13 +1152,23 @@ public:
     //! should use CurrentChainstate() instead.
     //! @{
     Chainstate& ActiveChainstate() const;
+
+    // Methods requiring caller to hold lock (for performance-critical paths)
     CChain& ActiveChain() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex()) { return ActiveChainstate().m_chain; }
+
+    // Snapshot methods with internal locking (for convenient concurrent access)
     CChain ActiveChainSnapshot() const {
         LOCK(GetMutex());
         return ActiveChainstate().m_chain;
     }
-    int ActiveHeight() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex()) { return ActiveChain().Height(); }
-    CBlockIndex* ActiveTip() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex()) { return ActiveChain().Tip(); }
+    int ActiveHeight() const {
+        LOCK(GetMutex());
+        return ActiveChainstate().m_chain.Height();
+    }
+    CBlockIndex* ActiveTip() const {
+        LOCK(GetMutex());
+        return ActiveChainstate().m_chain.Tip();
+    }
     //! @}
 
     node::BlockMap& BlockIndex() EXCLUSIVE_LOCKS_REQUIRED(::cs_main)

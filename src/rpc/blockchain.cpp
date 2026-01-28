@@ -238,7 +238,7 @@ static RPCHelpMan getblockcount()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    return chainman.ActiveChainSnapshot().Height();
+    return chainman.ActiveHeight();
 },
     };
 }
@@ -258,7 +258,7 @@ static RPCHelpMan getbestblockhash()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    return chainman.ActiveChainSnapshot().Tip()->GetBlockHash().GetHex();
+    return chainman.ActiveTip()->GetBlockHash().GetHex();
 },
     };
 }
@@ -481,7 +481,7 @@ static RPCHelpMan getdifficulty()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    return GetDifficulty(*CHECK_NONFATAL(chainman.ActiveChainSnapshot().Tip()));
+    return GetDifficulty(*CHECK_NONFATAL(chainman.ActiveTip()));
 },
     };
 }
@@ -619,7 +619,7 @@ static RPCHelpMan getblockheader()
     const CBlockIndex* pblockindex;
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
 
-    const CBlockIndex* tip = chainman.ActiveChainSnapshot().Tip();
+    const CBlockIndex* tip = chainman.ActiveTip();
 
     {
         LOCK(cs_main);
@@ -813,7 +813,7 @@ static RPCHelpMan getblock()
     const CBlockIndex* pblockindex;
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
 
-    const CBlockIndex* tip = chainman.ActiveChainSnapshot().Tip();
+    const CBlockIndex* tip = chainman.ActiveTip();
 
     {
         LOCK(cs_main);
