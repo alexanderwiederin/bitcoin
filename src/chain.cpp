@@ -19,8 +19,6 @@ std::string CBlockIndex::ToString() const
 
 void CChain::SetTip(CBlockIndex& block)
 {
-    LOCK(m_write_mutex);
-
     CBlockIndex* old_tip = Tip();
     int old_height = old_tip ? old_tip->nHeight : -1;
     bool is_sequential = (block.nHeight == old_height + 1 && block.pprev == old_tip);

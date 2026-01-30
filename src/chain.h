@@ -402,7 +402,6 @@ private:
     };
 
     stlab::copy_on_write<Impl> m_impl;
-    mutable Mutex m_write_mutex;
 
     static constexpr size_t MAX_TAIL_SIZE = 1000;
 
@@ -439,18 +438,10 @@ private:
 public:
     CChain() = default;
 
-    CChain(const CChain& other) : m_impl(other.m_impl) {}
-    CChain& operator=(const CChain& other)
-    {
-        if (this != &other) {
-            m_impl = other.m_impl;
-        }
-        return *this;
-    }
-
-    // Move operations are deleted because std::mutex is not moveable
-    CChain(CChain&&) = delete;
-    CChain& operator=(CChain&&) = delete;
+    CChain(const CChain& other) = default;
+    CChain& operator=(const CChain& other) = default;
+    CChain(CChain&&) noexcept = default;
+    CChain& operator=(CChain&&) noexcept = default;
 
     /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
     CBlockIndex* Genesis() const
@@ -520,7 +511,7 @@ public:
     }
 
     /** Set/initialize a chain with a given tip. */
-    void SetTip(CBlockIndex& block) EXCLUSIVE_LOCKS_REQUIRED(!m_write_mutex);
+    void SetTip(CBlockIndex& block);
 
     /** Find the last common block between this chain and a block index entry. */
     const CBlockIndex* FindFork(const CBlockIndex* pindex) const;
