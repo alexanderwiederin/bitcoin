@@ -409,7 +409,7 @@ private:
                      CBlockIndex& block)
     {
         auto& new_base = impl.base.write();
-        new_base.resize(block.nHeight + 1, nullptr);
+        new_base.resize(block.nHeight + 1);
 
         CBlockIndex* index = &block;
         while (index && new_base[index->nHeight] != index) {
