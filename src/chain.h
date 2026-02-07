@@ -94,8 +94,10 @@ enum BlockStatus : uint32_t {
 class CBlockIndex
 {
 public:
+    uint256 m_block_hash;
+
     //! pointer to the hash of the block, if any. Memory is owned by this CBlockIndex
-    const uint256* phashBlock{nullptr};
+    const uint256* phashBlock{&m_block_hash};
 
     //! pointer to the index of the predecessor of this block
     CBlockIndex* pprev{nullptr};
@@ -152,8 +154,14 @@ public:
     //! (memory only) Maximum nTime in the chain up to and including this block.
     unsigned int nTimeMax{0};
 
+    explicit CBlockIndex(const uint256& hash)
+        : m_block_hash{hash}
+    {
+    }
+
     explicit CBlockIndex(const CBlockHeader& block)
-        : nVersion{block.nVersion},
+        : m_block_hash{block.GetHash()},
+          nVersion{block.nVersion},
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
@@ -198,8 +206,7 @@ public:
 
     uint256 GetBlockHash() const
     {
-        assert(phashBlock != nullptr);
-        return *phashBlock;
+        return m_block_hash;
     }
 
     /**
