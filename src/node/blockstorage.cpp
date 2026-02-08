@@ -236,7 +236,6 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block, CBlockInde
     // competitive advantage.
     pindexNew->nSequenceId = SEQ_ID_INIT_FROM_DISK;
 
-    pindexNew->phashBlock = &((*mi).first);
     BlockMap::iterator miPrev = m_block_index.find(block.hashPrevBlock);
     if (miPrev != m_block_index.end()) {
         pindexNew->pprev = &(*miPrev).second;
@@ -414,9 +413,7 @@ CBlockIndex* BlockManager::InsertBlockIndex(const uint256& hash)
 
     const auto [mi, inserted]{m_block_index.try_emplace(hash)};
     CBlockIndex* pindex = &(*mi).second;
-    if (inserted) {
-        pindex->phashBlock = &((*mi).first);
-    }
+
     return pindex;
 }
 
