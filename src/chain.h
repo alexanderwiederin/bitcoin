@@ -385,6 +385,7 @@ class CChain
 {
 private:
     std::vector<CBlockIndex*> vChain;
+    mutable RecursiveMutex m_mutex;
 
 public:
     CChain() = default;
@@ -394,6 +395,7 @@ public:
     /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
     CBlockIndex* Genesis() const
     {
+        LOCK(m_mutex);
         return vChain.size() > 0 ? vChain[0] : nullptr;
     }
 

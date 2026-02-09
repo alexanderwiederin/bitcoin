@@ -15,6 +15,7 @@ std::string CBlockIndex::ToString() const
 
 void CChain::SetTip(CBlockIndex& block)
 {
+    LOCK(m_mutex);
     CBlockIndex* pindex = &block;
     vChain.resize(pindex->nHeight + 1);
     while (pindex && vChain[pindex->nHeight] != pindex) {
@@ -48,6 +49,7 @@ CBlockLocator GetLocator(const CBlockIndex* index)
 }
 
 const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
+    LOCK(m_mutex);
     if (pindex == nullptr) {
         return nullptr;
     }
@@ -60,6 +62,7 @@ const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
 
 CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
 {
+    LOCK(m_mutex);
     std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
     std::vector<CBlockIndex*>::const_iterator lower = std::lower_bound(vChain.begin(), vChain.end(), blockparams,
         [](CBlockIndex* pBlock, const std::pair<int64_t, int>& blockparams) -> bool { return pBlock->GetBlockTimeMax() < blockparams.first || pBlock->nHeight < blockparams.second; });
