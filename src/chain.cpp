@@ -115,6 +115,11 @@ CBlockIndex* CBlockIndex::GetAncestor(int height)
     return const_cast<CBlockIndex*>(static_cast<const CBlockIndex*>(this)->GetAncestor(height));
 }
 
+bool CBlockIndex::HasAncestor(const CBlockIndex* index) const
+{
+    return GetAncestor(index->nHeight) == index;
+}
+
 void CBlockIndex::BuildSkip()
 {
     if (pprev)

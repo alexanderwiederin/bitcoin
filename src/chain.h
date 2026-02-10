@@ -284,6 +284,8 @@ public:
     CBlockIndex* GetAncestor(int height);
     const CBlockIndex* GetAncestor(int height) const;
 
+    bool HasAncestor(const CBlockIndex* index) const;
+
     CBlockIndex() = default;
     ~CBlockIndex() = default;
 
