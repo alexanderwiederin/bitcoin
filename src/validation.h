@@ -1182,6 +1182,12 @@ public:
         return m_blockman.m_block_index;
     }
 
+    std::pair<BlockMap, CBlockIndex*> GetBlockIndexAndTip() const
+    {
+        LOCK(GetMutex());
+        return {m_blockman.m_block_index, ActiveChain().Tip()};
+    }
+
     /**
      * Track versionbit status
      */
