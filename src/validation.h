@@ -1162,6 +1162,12 @@ public:
     int ActiveHeight() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex()) { return ActiveChain().Height(); }
     CBlockIndex* ActiveTip() const EXCLUSIVE_LOCKS_REQUIRED(GetMutex()) { return ActiveChain().Tip(); }
     //! @}
+    //
+    std::pair<BlockMap, CBlockIndex*> GetBlockIndexAndTip() const
+    {
+        LOCK(GetMutex());
+        return {m_blockman.GetBlockIndexSnapshot(), ActiveChain().Tip()};
+    }
 
     /**
      * Update and possibly latch the IBD status.
