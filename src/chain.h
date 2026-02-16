@@ -13,6 +13,7 @@
 #include <primitives/block.h>
 #include <serialize.h>
 #include <sync.h>
+#include <threadsafety.h>
 #include <uint256.h>
 #include <util/time.h>
 
@@ -383,7 +384,8 @@ public:
 class CChain
 {
 private:
-    std::vector<CBlockIndex*> vChain;
+    std::vector<CBlockIndex*> vChain GUARDED_BY(m_mutex);
+    mutable GlobalMutex m_mutex;
 
 public:
     CChain() = default;
@@ -393,18 +395,21 @@ public:
     /** Returns the index entry for the genesis block of this chain, or nullptr if none. */
     CBlockIndex* Genesis() const
     {
+        LOCK(m_mutex);
         return vChain.size() > 0 ? vChain[0] : nullptr;
     }
 
     /** Returns the index entry for the tip of this chain, or nullptr if none. */
     CBlockIndex* Tip() const
     {
+        LOCK(m_mutex);
         return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
     }
 
     /** Returns the index entry at a particular height in this chain, or nullptr if no such height exists. */
     CBlockIndex* operator[](int nHeight) const
     {
+        LOCK(m_mutex);
         if (nHeight < 0 || nHeight >= (int)vChain.size())
             return nullptr;
         return vChain[nHeight];
@@ -413,28 +418,42 @@ public:
     /** Efficiently check whether a block is present in this chain. */
     bool Contains(const CBlockIndex* pindex) const
     {
-        return (*this)[pindex->nHeight] == pindex;
+        LOCK(m_mutex);
+        if (pindex->nHeight < 0 || pindex->nHeight >= (int)vChain.size())
+            return false;
+        return vChain[pindex->nHeight] == pindex;
     }
 
     /** Find the successor of a block in this chain, or nullptr if the given index is not found or is the tip. */
     CBlockIndex* Next(const CBlockIndex* pindex) const
     {
-        if (Contains(pindex))
-            return (*this)[pindex->nHeight + 1];
-        else
+        LOCK(m_mutex);
+
+        if (pindex->nHeight < 0 || pindex->nHeight >= (int)vChain.size())
             return nullptr;
+
+        if (vChain[pindex->nHeight] != pindex)
+            return nullptr;
+
+        // Check if there's a next block
+        if (pindex->nHeight + 1 >= (int)vChain.size())
+            return nullptr;
+
+        return vChain[pindex->nHeight + 1];
     }
 
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
     int Height() const
     {
+        LOCK(m_mutex);
         return int(vChain.size()) - 1;
     }
 
     /** Check whether this chain's tip exists, has enough work, and is recent. */
     bool IsTipRecent(const arith_uint256& min_chain_work, std::chrono::seconds max_tip_age) const EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
     {
-        const auto tip{Tip()};
+        LOCK(m_mutex);
+        const auto tip = vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
         return tip &&
                tip->nChainWork >= min_chain_work &&
                tip->Time() >= Now<NodeSeconds>() - max_tip_age;
