@@ -1182,6 +1182,11 @@ public:
         return m_blockman.m_block_index;
     }
 
+    BlockMap BlockIndexSnapshot()
+    {
+        return m_blockman.GetBlockIndexSnapshot();
+    }
+
     /**
      * Track versionbit status
      */
