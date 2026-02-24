@@ -542,7 +542,7 @@ static RPCHelpMan getblockfrompeer()
     const uint256& block_hash{ParseHashV(request.params[0], "blockhash")};
     const NodeId peer_id{request.params[1].getInt<int64_t>()};
 
-    const CBlockIndex* const index = WITH_LOCK(cs_main, return chainman.m_blockman.LookupBlockIndex(block_hash););
+    const CBlockIndex* const index = chainman.m_blockman.LookupBlockIndex(block_hash);
 
     if (!index) {
         throw JSONRPCError(RPC_MISC_ERROR, "Block header missing");

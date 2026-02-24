@@ -219,18 +219,15 @@ static bool rest_headers(const std::any& context,
     ChainstateManager* maybe_chainman = GetChainman(context, req);
     if (!maybe_chainman) return false;
     ChainstateManager& chainman = *maybe_chainman;
-    {
-        LOCK(cs_main);
-        CChain& active_chain = chainman.ActiveChain();
-        tip = active_chain.Tip();
-        const CBlockIndex* pindex{chainman.m_blockman.LookupBlockIndex(*hash)};
-        while (pindex != nullptr && active_chain.Contains(pindex)) {
-            headers.push_back(pindex);
-            if (headers.size() == *parsed_count) {
-                break;
-            }
-            pindex = active_chain.Next(pindex);
+    CChain& active_chain = chainman.ActiveChain();
+    tip = active_chain.Tip();
+    const CBlockIndex* pindex{chainman.m_blockman.LookupBlockIndex(*hash)};
+    while (pindex != nullptr && active_chain.Contains(pindex)) {
+        headers.push_back(pindex);
+        if (headers.size() == *parsed_count) {
+            break;
         }
+        pindex = active_chain.Next(pindex);
     }
 
     switch (rf) {
@@ -336,7 +333,7 @@ static bool rest_spent_txouts(const std::any& context, HTTPRequest* req, const s
         return false;
     }
 
-    const CBlockIndex* pblockindex = WITH_LOCK(cs_main, return chainman->m_blockman.LookupBlockIndex(*hash));
+    const CBlockIndex* pblockindex = chainman->m_blockman.LookupBlockIndex(*hash);
     if (!pblockindex) {
         return RESTERR(req, HTTP_NOT_FOUND, hashStr + " not found");
     }
