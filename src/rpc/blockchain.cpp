@@ -2608,22 +2608,19 @@ static RPCHelpMan scanblocks()
         // set the start-height
         const CBlockIndex* start_index = nullptr;
         const CBlockIndex* stop_block = nullptr;
-        {
-            LOCK(cs_main);
-            CChain& active_chain = chainman.ActiveChain();
-            start_index = active_chain.Genesis();
-            stop_block = active_chain.Tip(); // If no stop block is provided, stop at the chain tip.
-            if (!request.params[2].isNull()) {
-                start_index = active_chain[request.params[2].getInt<int>()];
-                if (!start_index) {
-                    throw JSONRPCError(RPC_MISC_ERROR, "Invalid start_height");
-                }
+        CChain& active_chain = chainman.ActiveChain();
+        start_index = active_chain.Genesis();
+        stop_block = active_chain.Tip(); // If no stop block is provided, stop at the chain tip.
+        if (!request.params[2].isNull()) {
+            start_index = active_chain[request.params[2].getInt<int>()];
+            if (!start_index) {
+                throw JSONRPCError(RPC_MISC_ERROR, "Invalid start_height");
             }
-            if (!request.params[3].isNull()) {
-                stop_block = active_chain[request.params[3].getInt<int>()];
-                if (!stop_block || stop_block->nHeight < start_index->nHeight) {
-                    throw JSONRPCError(RPC_MISC_ERROR, "Invalid stop_height");
-                }
+        }
+        if (!request.params[3].isNull()) {
+            stop_block = active_chain[request.params[3].getInt<int>()];
+            if (!stop_block || stop_block->nHeight < start_index->nHeight) {
+                throw JSONRPCError(RPC_MISC_ERROR, "Invalid stop_height");
             }
         }
         CHECK_NONFATAL(start_index);
@@ -2660,7 +2657,7 @@ static RPCHelpMan scanblocks()
             // split the lookup range in chunks if we are deeper than 'amount_per_chunk' blocks from the stopping block
             int start_block = !end_range ? start_index->nHeight : start_index->nHeight + 1; // to not include the previous round 'end_range' block
             end_range = (start_block + amount_per_chunk < stop_block->nHeight) ?
-                    WITH_LOCK(::cs_main, return chainman.ActiveChain()[start_block + amount_per_chunk]) :
+                    chainman.ActiveChain()[start_block + amount_per_chunk] :
                     stop_block;
 
             if (index->LookupFilterRange(start_block, end_range, filters)) {
