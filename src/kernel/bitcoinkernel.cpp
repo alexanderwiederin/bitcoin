@@ -1320,7 +1320,6 @@ const btck_Chain* btck_chainstate_manager_get_active_chain(const btck_Chainstate
 
 int btck_chain_get_height(const btck_Chain* chain)
 {
-    LOCK(::cs_main);
     return btck_Chain::get(chain).Height();
 }
 

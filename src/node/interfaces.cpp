@@ -305,7 +305,6 @@ public:
     }
     int getNumBlocks() override
     {
-        LOCK(::cs_main);
         return chainman().ActiveChain().Height();
     }
     uint256 getBestBlockHash() override

@@ -260,7 +260,6 @@ static RPCHelpMan getblockcount()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
     return chainman.ActiveChain().Height();
 },
     };
@@ -3151,7 +3150,7 @@ static RPCHelpMan dumptxoutset()
             disable_network.emplace(connman);
         }
 
-        invalidate_index = WITH_LOCK(::cs_main, return node.chainman->ActiveChain().Next(target_index));
+        invalidate_index = node.chainman->ActiveChain().Next(target_index);
         temporary_rollback.emplace(*node.chainman, *invalidate_index);
     }
 
