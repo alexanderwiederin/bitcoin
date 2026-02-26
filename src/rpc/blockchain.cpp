@@ -126,7 +126,6 @@ static int ComputeNextBlockAndDepth(const CBlockIndex& tip, const CBlockIndex& b
 
 static const CBlockIndex* ParseHashOrHeight(const UniValue& param, ChainstateManager& chainman)
 {
-    LOCK(::cs_main);
     CChain& active_chain = chainman.ActiveChain();
 
     if (param.isNum()) {
@@ -583,7 +582,6 @@ static RPCHelpMan getblockhash()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
     const CChain& active_chain = chainman.ActiveChain();
 
     int nHeight = request.params[0].getInt<int>();

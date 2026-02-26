@@ -553,7 +553,6 @@ public:
     }
     uint256 getBlockHash(int height) override
     {
-        LOCK(::cs_main);
         return Assert(chainman().ActiveChain()[height])->GetBlockHash();
     }
     bool haveBlockOnDisk(int height) override
