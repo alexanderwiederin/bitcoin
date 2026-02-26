@@ -282,7 +282,6 @@ static RPCHelpMan getbestblockhash()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    LOCK(cs_main);
     return chainman.ActiveChain().Tip()->GetBlockHash().GetHex();
 },
     };
@@ -643,14 +642,9 @@ static RPCHelpMan getblockheader()
     if (!request.params[1].isNull())
         fVerbose = request.params[1].get_bool();
 
-    const CBlockIndex* pblockindex;
-    const CBlockIndex* tip;
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    {
-        LOCK(cs_main);
-        pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
-        tip = chainman.ActiveChain().Tip();
-    }
+    const CBlockIndex* pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
+    const CBlockIndex* tip = chainman.ActiveChain().Tip();
 
     if (!pblockindex) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -847,14 +841,11 @@ static RPCHelpMan getblock()
     const CBlockIndex* pblockindex;
     const CBlockIndex* tip;
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    {
-        LOCK(cs_main);
-        pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
-        tip = chainman.ActiveChain().Tip();
+    pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
+    tip = chainman.ActiveChain().Tip();
 
-        if (!pblockindex) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-        }
+    if (!pblockindex) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     }
 
     const std::vector<std::byte> block_data{GetRawBlockChecked(chainman.m_blockman, *pblockindex)};
@@ -1833,11 +1824,9 @@ static RPCHelpMan getchaintxstats()
     int blockcount = 30 * 24 * 60 * 60 / chainman.GetParams().GetConsensus().nPowTargetSpacing; // By default: 1 month
 
     if (request.params[1].isNull()) {
-        LOCK(cs_main);
         pindex = chainman.ActiveChain().Tip();
     } else {
         uint256 hash(ParseHashV(request.params[1], "blockhash"));
-        LOCK(cs_main);
         pindex = chainman.m_blockman.LookupBlockIndex(hash);
         if (!pindex) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -3095,7 +3084,7 @@ static RPCHelpMan dumptxoutset()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     NodeContext& node = EnsureAnyNodeContext(request.context);
-    const CBlockIndex* tip{WITH_LOCK(::cs_main, return node.chainman->ActiveChain().Tip())};
+    const CBlockIndex* tip{node.chainman->ActiveChain().Tip()};
     const CBlockIndex* target_index{nullptr};
     const auto snapshot_type{self.Arg<std::string_view>("type")};
     const UniValue options{request.params[2].isNull() ? UniValue::VOBJ : request.params[2]};

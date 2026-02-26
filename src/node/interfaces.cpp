@@ -310,7 +310,7 @@ public:
     }
     uint256 getBestBlockHash() override
     {
-        const CBlockIndex* tip = WITH_LOCK(::cs_main, return chainman().ActiveChain().Tip());
+        const CBlockIndex* tip = chainman().ActiveChain().Tip();
         return tip ? tip->GetBlockHash() : chainman().GetParams().GenesisBlock().GetHash();
     }
     int64_t getLastBlockTime() override
@@ -782,7 +782,10 @@ public:
     }
     void waitForNotificationsIfTipChanged(const uint256& old_tip) override
     {
-        if (!old_tip.IsNull() && old_tip == WITH_LOCK(::cs_main, return chainman().ActiveChain().Tip()->GetBlockHash())) return;
+        if (!old_tip.IsNull()) {
+            const CBlockIndex* tip = chainman().ActiveChain().Tip();
+            if (tip && old_tip == tip->GetBlockHash()) return;
+        }
         validation_signals().SyncWithValidationInterfaceQueue();
     }
     std::unique_ptr<Handler> handleRpc(const CRPCCommand& command) override
