@@ -280,6 +280,7 @@ class P2PPrivateBroadcast(BitcoinTestFramework):
                 continue
             self.log.debug(f"{label}: outbound connection i={i} to {dest['requested_to']} must be a private broadcast, checking it")
             peer.wait_for_disconnect()
+            peer.wait_until(lambda: peer.message_count.get("tx") == 1 and peer.message_count.get("ping") == 1, check_connected=False)
             # Now it is (C).
             assert_equal(peer.message_count, {
                 "version": 1,
