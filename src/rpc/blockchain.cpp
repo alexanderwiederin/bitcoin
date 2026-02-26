@@ -2755,20 +2755,17 @@ static RPCHelpMan getdescriptoractivity()
 
     std::set<const CBlockIndex*, CompareByHeightAscending> blockindexes_sorted;
 
-    {
-        // Validate all given blockhashes, and ensure blocks are along a single chain.
-        LOCK(::cs_main);
-        for (const UniValue& blockhash : request.params[0].get_array().getValues()) {
-            uint256 bhash = ParseHashV(blockhash, "blockhash");
-            CBlockIndex* pindex = chainman.m_blockman.LookupBlockIndex(bhash);
-            if (!pindex) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-            }
-            if (!chainman.ActiveChain().Contains(pindex)) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "Block is not in main chain");
-            }
-            blockindexes_sorted.insert(pindex);
+    // Validate all given blockhashes, and ensure blocks are along a single chain.
+    for (const UniValue& blockhash : request.params[0].get_array().getValues()) {
+        uint256 bhash = ParseHashV(blockhash, "blockhash");
+        CBlockIndex* pindex = chainman.m_blockman.LookupBlockIndex(bhash);
+        if (!pindex) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         }
+        if (!chainman.ActiveChain().Contains(pindex)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Block is not in main chain");
+        }
+        blockindexes_sorted.insert(pindex);
     }
 
     std::set<CScript> scripts_to_watch;

@@ -68,7 +68,6 @@ static void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
     TxToUniv(tx, /*block_hash=*/uint256(), entry, /*include_hex=*/true, txundo, verbosity);
 
     if (!hashBlock.IsNull()) {
-        LOCK(cs_main);
 
         entry.pushKV("blockhash", hashBlock.GetHex());
         const CBlockIndex* pindex = active_chainstate.m_blockman.LookupBlockIndex(hashBlock);
@@ -335,7 +334,6 @@ static RPCHelpMan getrawtransaction()
 
     UniValue result(UniValue::VOBJ);
     if (blockindex) {
-        LOCK(cs_main);
         result.pushKV("in_active_chain", chainman.ActiveChain().Contains(blockindex));
     }
     // If request is verbosity >= 1 but no blockhash was given, then look up the blockindex
