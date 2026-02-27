@@ -1689,15 +1689,12 @@ static RPCHelpMan preciousblock()
 }
 
 void InvalidateBlock(ChainstateManager& chainman, const uint256 block_hash) {
-    BlockValidationState state;
-    CBlockIndex* pblockindex;
-    {
-        LOCK(chainman.GetMutex());
-        pblockindex = chainman.m_blockman.LookupBlockIndex(block_hash);
-        if (!pblockindex) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-        }
+    CBlockIndex* pblockindex = chainman.m_blockman.LookupBlockIndex(block_hash);
+    if (!pblockindex) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     }
+
+    BlockValidationState state;
     chainman.ActiveChainstate().InvalidateBlock(state, pblockindex);
 
     if (state.IsValid()) {
