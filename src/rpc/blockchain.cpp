@@ -1671,12 +1671,9 @@ static RPCHelpMan preciousblock()
     CBlockIndex* pblockindex;
 
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
-    {
-        LOCK(cs_main);
-        pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
-        if (!pblockindex) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-        }
+    pblockindex = chainman.m_blockman.LookupBlockIndex(hash);
+    if (!pblockindex) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     }
 
     BlockValidationState state;
