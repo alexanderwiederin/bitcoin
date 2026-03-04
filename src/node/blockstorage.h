@@ -471,9 +471,8 @@ public:
 
     void CleanupBlockRevFiles() const;
 
-    BlockMap GetBlockIndexSnapshot() const NO_THREAD_SAFETY_ANALYSIS // TODO: remove NO_THREAD_SAFETY_ANALYSIS (temporary hack)
+    BlockMap GetBlockIndexSnapshot() const
     {
-        LOCK(m_block_index_mutex);
         return m_block_index;
     }
 };
