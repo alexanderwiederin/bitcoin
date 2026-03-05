@@ -15,7 +15,7 @@ std::string CBlockIndex::ToString() const
                      pprev, nHeight, hashMerkleRoot.ToString(), GetBlockHash().ToString());
 }
 
-void CChain::SetTip(CBlockIndex& block)
+void CChain::SetTip(CBlockIndex& block) EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
 {
     LOCK(m_mutex);
     CBlockIndex* pindex = &block;
@@ -50,7 +50,8 @@ CBlockLocator GetLocator(const CBlockIndex* index)
     return CBlockLocator{LocatorEntries(index)};
 }
 
-const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
+const CBlockIndex* CChain::FindFork(const CBlockIndex* pindex) const EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
+{
     LOCK(m_mutex);
     if (pindex == nullptr) {
         return nullptr;
@@ -71,7 +72,7 @@ const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
     return pindex;
 }
 
-CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const
+CBlockIndex* CChain::FindEarliestAtLeast(int64_t nTime, int height) const EXCLUSIVE_LOCKS_REQUIRED(!m_mutex)
 {
     LOCK(m_mutex);
     std::pair<int64_t, int> blockparams = std::make_pair(nTime, height);
