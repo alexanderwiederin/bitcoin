@@ -8,6 +8,10 @@
 
 #ifdef DEBUG_LOCKCONTENTION
 #include <logging/timer.h>
+
+#include <cstdio>
+#include <unordered_map>
+inline thread_local std::unordered_map<void*, int> g_lock_depth;
 #endif
 
 #include <threadsafety.h> // IWYU pragma: export
@@ -147,20 +151,50 @@ class SCOPED_LOCKABLE UniqueLock : public MutexType::unique_lock
 private:
     using Base = typename MutexType::unique_lock;
 
+#ifdef DEBUG_LOCKCONTENTION
+    const char* m_name{nullptr};
+    const char* m_file{nullptr};
+    int m_line{0};
+    bool m_is_outermost{false};
+    std::chrono::steady_clock::time_point m_lock_acquired;
+
+    void RecordAcquired()
+    {
+        void* key = static_cast<void*>(Base::mutex());
+        if (++g_lock_depth[key] == 1) {
+            m_lock_acquired = std::chrono::steady_clock::now();
+            m_is_outermost = true;
+        }
+    }
+#endif
+
     void Enter(const char* pszName, const char* pszFile, int nLine)
     {
         EnterCritical(pszName, pszFile, nLine, Base::mutex());
 #ifdef DEBUG_LOCKCONTENTION
-        if (Base::try_lock()) return;
-        LOG_TIME_MICROS_WITH_CATEGORY(strprintf("lock contention %s, %s:%d", pszName, pszFile, nLine), BCLog::LOCK);
-#endif
+        m_name = pszName;
+        m_file = pszFile;
+        m_line = nLine;
+        if (!Base::try_lock()) {
+            LOG_TIME_MICROS_WITH_CATEGORY(strprintf("lock contention %s, %s:%d", pszName, pszFile, nLine), BCLog::LOCK);
+            Base::lock();
+        }
+        RecordAcquired();
+#else
         Base::lock();
+#endif
     }
 
     bool TryEnter(const char* pszName, const char* pszFile, int nLine)
     {
         EnterCritical(pszName, pszFile, nLine, Base::mutex(), true);
+#ifdef DEBUG_LOCKCONTENTION
         if (Base::try_lock()) {
+            m_name = pszName;
+            m_file = pszFile;
+            m_line = nLine;
+            RecordAcquired();
+#endif
             return true;
         }
         LeaveCritical();
@@ -189,8 +223,22 @@ public:
 
     ~UniqueLock() UNLOCK_FUNCTION()
     {
-        if (Base::owns_lock())
+        if (Base::owns_lock()) {
+#ifdef DEBUG_LOCKCONTENTION
+            void* key = static_cast<void*>(Base::mutex());
+            auto remaining = --g_lock_depth[key];
+            if (m_is_outermost && remaining == 0) {
+                auto held_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                   std::chrono::steady_clock::now() - m_lock_acquired)
+                                   .count();
+                if (held_us > 0) {
+                    fprintf(stderr, "lock held: lock=%s %s:%d held=%lldµs\n",
+                            m_name, m_file, m_line, held_us);
+                }
+            }
+#endif
             LeaveCritical();
+        }
     }
 
     operator bool()
