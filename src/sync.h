@@ -80,6 +80,12 @@ inline bool LockStackEmpty() { return true; }
  * thread, or spuriously. Responsible for locking the lock before returning.
  */
 #ifdef DEBUG_LOCKCONTENTION
+#include <chrono>
+
+static constexpr int LOCK_HELD_THRESHOLD_US{1000};
+
+// Forward declaration — defined in sync.cpp to avoid two-phase lookup issues
+void LogLockHeld(long us, const std::string& name, const std::string& file, int line);
 
 template <typename LockType>
 void ContendedLock(std::string_view name, std::string_view file, int nLine, LockType& lock);
@@ -155,6 +161,14 @@ class SCOPED_LOCKABLE UniqueLock : public MutexType::unique_lock
 private:
     using Base = typename MutexType::unique_lock;
 
+#ifdef DEBUG_LOCKCONTENTION
+    std::chrono::steady_clock::time_point m_lock_acquired;
+    std::chrono::microseconds m_total_held{0};
+    std::string m_lock_name;
+    std::string m_lock_file;
+    int m_lock_line{0};
+#endif
+
     void Enter(const char* pszName, const char* pszFile, int nLine)
     {
         EnterCritical(pszName, pszFile, nLine, Base::mutex());
@@ -162,6 +176,10 @@ private:
         if (!Base::try_lock()) {
             ContendedLock(pszName, pszFile, nLine, static_cast<Base&>(*this));
         }
+        m_lock_acquired = std::chrono::steady_clock::now();
+        m_lock_name = pszName;
+        m_lock_file = pszFile;
+        m_lock_line = nLine;
 #else
         Base::lock();
 #endif
@@ -171,6 +189,12 @@ private:
     {
         EnterCritical(pszName, pszFile, nLine, Base::mutex(), true);
         if (Base::try_lock()) {
+#ifdef DEBUG_LOCKCONTENTION
+            m_lock_acquired = std::chrono::steady_clock::now();
+            m_lock_name = pszName;
+            m_lock_file = pszFile;
+            m_lock_line = nLine;
+#endif
             return true;
         }
         LeaveCritical();
@@ -199,8 +223,16 @@ public:
 
     ~UniqueLock() UNLOCK_FUNCTION()
     {
-        if (Base::owns_lock())
+        if (Base::owns_lock()) {
+#ifdef DEBUG_LOCKCONTENTION
+            auto held = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - m_lock_acquired);
+            if (held.count() >= LOCK_HELD_THRESHOLD_US) {
+                LogLockHeld(held.count(), m_lock_name, m_lock_file, m_lock_line);
+            }
+#endif
             LeaveCritical();
+        }
     }
 
     operator bool()
@@ -223,6 +255,13 @@ public:
             assert(std::addressof(mutex) == lock.mutex());
 
             CheckLastCritical((void*)lock.mutex(), lockname, _guardname, _file, _line);
+#ifdef DEBUG_LOCKCONTENTION
+            auto held = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - lock.m_lock_acquired);
+            if (held.count() >= LOCK_HELD_THRESHOLD_US) {
+                LogLockHeld(held.count(), lock.m_lock_name, lock.m_lock_file, lock.m_lock_line);
+            }
+#endif
             lock.unlock();
             LeaveCritical();
             lock.swap(templock);
@@ -232,6 +271,9 @@ public:
             templock.swap(lock);
             EnterCritical(lockname.c_str(), file.c_str(), line, lock.mutex());
             lock.lock();
+#ifdef DEBUG_LOCKCONTENTION
+            lock.m_lock_acquired = std::chrono::steady_clock::now();
+#endif
         }
 
      private:

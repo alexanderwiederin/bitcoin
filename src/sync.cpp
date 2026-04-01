@@ -32,6 +32,11 @@ void ContendedLock(std::string_view name, std::string_view file, int nLine, Lock
 template void ContendedLock(std::string_view name, std::string_view file, int nLine, std::unique_lock<std::mutex>& lock);
 template void ContendedLock(std::string_view name, std::string_view file, int nLine, std::unique_lock<std::recursive_mutex>& lock);
 
+void LogLockHeld(long us, const std::string& name, const std::string& file, int line)
+{
+    LogDebug(BCLog::LOCK, "LOCK HELD %ldus: %s (held at %s:%d)\n", us, name, file, line);
+}
+
 #endif
 
 #ifdef DEBUG_LOCKORDER
