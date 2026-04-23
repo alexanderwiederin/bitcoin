@@ -87,6 +87,8 @@ static constexpr int LOCK_HELD_THRESHOLD_US{1000};
 // Forward declaration — defined in sync.cpp to avoid two-phase lookup issues
 void LogLockHeld(long us, const std::string& name, const std::string& file, int line);
 
+enum class WaitLock { Yes, No };
+
 template <typename LockType>
 void ContendedLock(std::string_view name, std::string_view file, int nLine, LockType& lock);
 #endif
@@ -167,6 +169,7 @@ private:
     std::string m_lock_name;
     std::string m_lock_file;
     int m_lock_line{0};
+    WaitLock m_wait_lock{WaitLock::No};
 #endif
 
     void Enter(const char* pszName, const char* pszFile, int nLine)
@@ -202,15 +205,18 @@ private:
     }
 
 public:
-    UniqueLock(MutexType& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) EXCLUSIVE_LOCK_FUNCTION(mutexIn) : Base(mutexIn, std::defer_lock)
+    UniqueLock(MutexType& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false, WaitLock waitLock = WaitLock::No) EXCLUSIVE_LOCK_FUNCTION(mutexIn) : Base(mutexIn, std::defer_lock)
     {
         if (fTry)
             TryEnter(pszName, pszFile, nLine);
         else
             Enter(pszName, pszFile, nLine);
+#ifdef DEBUG_LOCKCONTENTION
+        m_wait_lock = waitLock;
+#endif
     }
 
-    UniqueLock(MutexType* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) EXCLUSIVE_LOCK_FUNCTION(pmutexIn)
+    UniqueLock(MutexType* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false, WaitLock waitLock = WaitLock::No) EXCLUSIVE_LOCK_FUNCTION(pmutexIn)
     {
         if (!pmutexIn) return;
 
@@ -219,6 +225,9 @@ public:
             TryEnter(pszName, pszFile, nLine);
         else
             Enter(pszName, pszFile, nLine);
+#ifdef DEBUG_LOCKCONTENTION
+        m_wait_lock = waitLock;
+#endif
     }
 
     ~UniqueLock() UNLOCK_FUNCTION()
@@ -227,7 +236,7 @@ public:
 #ifdef DEBUG_LOCKCONTENTION
             auto held = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - m_lock_acquired);
-            if (held.count() >= LOCK_HELD_THRESHOLD_US) {
+            if (held.count() >= LOCK_HELD_THRESHOLD_US && m_wait_lock == WaitLock::No) {
                 LogLockHeld(held.count(), m_lock_name, m_lock_file, m_lock_line);
             }
 #endif
@@ -258,7 +267,7 @@ public:
 #ifdef DEBUG_LOCKCONTENTION
             auto held = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - lock.m_lock_acquired);
-            if (held.count() >= LOCK_HELD_THRESHOLD_US) {
+            if (held.count() >= LOCK_HELD_THRESHOLD_US && lock.m_wait_lock == WaitLock::No) {
                 LogLockHeld(held.count(), lock.m_lock_name, lock.m_lock_file, lock.m_lock_line);
             }
 #endif
@@ -313,7 +322,12 @@ inline MutexType* MaybeCheckNotHeld(MutexType* m) LOCKS_EXCLUDED(m) LOCK_RETURNE
     UniqueLock criticalblock2(MaybeCheckNotHeld(cs2), #cs2, __FILE__, __LINE__)
 #define LOCK_ARGS(cs) MaybeCheckNotHeld(cs), #cs, __FILE__, __LINE__
 #define TRY_LOCK(cs, name) UniqueLock name(LOCK_ARGS(cs), true)
+
+#ifdef DEBUG_LOCKCONTENTION
+#define WAIT_LOCK(cs, name) UniqueLock name(LOCK_ARGS(cs), /*fTry=*/false, WaitLock::Yes)
+#else
 #define WAIT_LOCK(cs, name) UniqueLock name(LOCK_ARGS(cs))
+#endif
 
 //! Run code while locking a mutex.
 //!
