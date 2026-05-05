@@ -24,17 +24,17 @@
 #ifdef DEBUG_LOCKCONTENTION
 
 template <typename LockType>
-void ContendedLock(std::string_view name, std::string_view file, int nLine, LockType& lock)
+void ContendedLock(std::string_view name, std::string_view file, int nLine, LockType& lock, std::string_view thread_name)
 {
-    LOG_TIME_MICROS_WITH_CATEGORY(strprintf("lock contention %s, %s:%d", name, file, nLine), BCLog::LOCK);
+    LOG_TIME_MICROS_WITH_CATEGORY(strprintf("lock contention %s, %s:%d (thread: %s)", name, file, nLine, thread_name), BCLog::LOCK);
     lock.lock();
 }
-template void ContendedLock(std::string_view name, std::string_view file, int nLine, std::unique_lock<std::mutex>& lock);
-template void ContendedLock(std::string_view name, std::string_view file, int nLine, std::unique_lock<std::recursive_mutex>& lock);
+template void ContendedLock(std::string_view name, std::string_view file, int nLine, std::unique_lock<std::mutex>& lock, std::string_view thread_name);
+template void ContendedLock(std::string_view name, std::string_view file, int nLine, std::unique_lock<std::recursive_mutex>& lock, std::string_view thread_name);
 
-void LogLockHeld(long us, const std::string& name, const std::string& file, int line)
+void LogLockHeld(long us, const std::string& name, const std::string& file, int line, const std::string& thread_name)
 {
-    LogDebug(BCLog::LOCK, "LOCK HELD %ldus: %s (held at %s:%d)\n", us, name, file, line);
+    LogDebug(BCLog::LOCK, "LOCK HELD %ldus: %s (held at %s:%d) (thread: %s)\n", us, name, file, line, thread_name);
 }
 
 #endif

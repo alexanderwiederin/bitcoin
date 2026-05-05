@@ -81,17 +81,18 @@ inline bool LockStackEmpty() { return true; }
  */
 #ifdef DEBUG_LOCKCONTENTION
 #include <chrono>
+#include <util/threadnames.h>
 
 static constexpr int LOCK_HELD_THRESHOLD_US{1000};
 
 // Forward declaration — defined in sync.cpp to avoid two-phase lookup issues
-void LogLockHeld(long us, const std::string& name, const std::string& file, int line);
-
-enum class WaitLock { Yes, No };
+void LogLockHeld(long us, const std::string& name, const std::string& file, int line, const std::string& thread_name);
 
 template <typename LockType>
-void ContendedLock(std::string_view name, std::string_view file, int nLine, LockType& lock);
+void ContendedLock(std::string_view name, std::string_view file, int nLine, LockType& lock, std::string_view thread_name);
 #endif
+
+enum class WaitLock { Yes, No };
 
 /**
  * Template mixin that adds -Wthread-safety locking annotations and lock order
@@ -170,6 +171,7 @@ private:
     std::string m_lock_file;
     int m_lock_line{0};
     WaitLock m_wait_lock{WaitLock::No};
+    std::string m_thread_name;
 #endif
 
     void Enter(const char* pszName, const char* pszFile, int nLine)
@@ -177,7 +179,7 @@ private:
         EnterCritical(pszName, pszFile, nLine, Base::mutex());
 #ifdef DEBUG_LOCKCONTENTION
         if (!Base::try_lock()) {
-            ContendedLock(pszName, pszFile, nLine, static_cast<Base&>(*this));
+            ContendedLock(pszName, pszFile, nLine, static_cast<Base&>(*this), util::ThreadGetInternalName());
         }
         m_lock_acquired = std::chrono::steady_clock::now();
         m_lock_name = pszName;
@@ -213,6 +215,7 @@ public:
             Enter(pszName, pszFile, nLine);
 #ifdef DEBUG_LOCKCONTENTION
         m_wait_lock = waitLock;
+        m_thread_name = util::ThreadGetInternalName();
 #endif
     }
 
@@ -237,7 +240,7 @@ public:
             auto held = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - m_lock_acquired);
             if (held.count() >= LOCK_HELD_THRESHOLD_US && m_wait_lock == WaitLock::No) {
-                LogLockHeld(held.count(), m_lock_name, m_lock_file, m_lock_line);
+                LogLockHeld(held.count(), m_lock_name, m_lock_file, m_lock_line, m_thread_name);
             }
 #endif
             LeaveCritical();
@@ -268,7 +271,7 @@ public:
             auto held = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - lock.m_lock_acquired);
             if (held.count() >= LOCK_HELD_THRESHOLD_US && lock.m_wait_lock == WaitLock::No) {
-                LogLockHeld(held.count(), lock.m_lock_name, lock.m_lock_file, lock.m_lock_line);
+                LogLockHeld(held.count(), lock.m_lock_name, lock.m_lock_file, lock.m_lock_line, lock.m_thread_name);
             }
 #endif
             lock.unlock();
