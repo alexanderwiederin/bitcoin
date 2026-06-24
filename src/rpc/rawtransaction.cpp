@@ -2146,6 +2146,12 @@ RPCMethod descriptorprocesspsbt()
         complete = complete && PSBTInputSignedAndVerified(psbtx, i, &txdata);
     }
 
+    CMutableTransaction mtx;
+    if (complete) {
+        PartiallySignedTransaction psbtx_copy = psbtx;
+        complete = FinalizeAndExtractPSBT(psbtx_copy, mtx);
+    }
+
     DataStream ssTx{};
     ssTx << psbtx;
 
@@ -2154,9 +2160,6 @@ RPCMethod descriptorprocesspsbt()
     result.pushKV("psbt", EncodeBase64(ssTx));
     result.pushKV("complete", complete);
     if (complete) {
-        CMutableTransaction mtx;
-        PartiallySignedTransaction psbtx_copy = psbtx;
-        CHECK_NONFATAL(FinalizeAndExtractPSBT(psbtx_copy, mtx));
         DataStream ssTx_final;
         ssTx_final << TX_WITH_WITNESS(mtx);
         result.pushKV("hex", HexStr(ssTx_final));
