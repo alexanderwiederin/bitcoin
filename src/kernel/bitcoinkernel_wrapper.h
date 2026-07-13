@@ -400,6 +400,7 @@ class PrecomputedTransactionData;
 class Transaction;
 class TransactionOutput;
 class BlockValidationState;
+class Coin;
 
 template <typename Derived>
 class ScriptPubkeyApi
@@ -847,6 +848,13 @@ public:
         BlockCheckFlags flags,
         BlockValidationState& state) const;
 
+    bool Validate(const ConsensusParamsView& consensus_params,
+        const std::vector<Coin>& spent_coins,
+        int32_t height,
+        int64_t prev_median_time_past,
+        const std::vector<int64_t>* coin_median_time_pasts,
+        BlockValidationState& state) const;
+
     MAKE_RANGE_METHOD(Transactions, Block, &Block::CountTransactions, &Block::GetTransaction, *this)
 
     BlockHash GetHash() const
@@ -1228,6 +1236,9 @@ public:
     Coin(btck_Coin* coin) : Handle{coin} {}
 
     Coin(const CoinView& view) : Handle{view} {}
+
+    Coin(const TransactionOutputView& output, uint32_t confirmation_height, bool is_coinbase)
+        : Handle{btck_coin_create(output.get(), confirmation_height, is_coinbase)} {}
 };
 
 template <typename Derived>
@@ -1291,6 +1302,25 @@ public:
 
     MAKE_RANGE_METHOD(TxsSpentOutputs, BlockSpentOutputs, &BlockSpentOutputs::Count, &BlockSpentOutputs::GetTxSpentOutputs, *this)
 };
+
+inline bool Block::Validate(const ConsensusParamsView& consensus_params,
+    const std::vector<Coin>& spent_coins,
+    int32_t height,
+    int64_t prev_median_time_past,
+    const std::vector<int64_t>* coin_median_time_pasts,
+    BlockValidationState& state) const
+{
+    std::vector<const btck_Coin*> coins;
+    coins.reserve(spent_coins.size());
+    for (const auto& coin : spent_coins) {
+        coins.push_back(coin.get());
+    }
+    return btck_block_validate(get(), consensus_params.get(), coins.data(), coins.size(),
+                               height, prev_median_time_past,
+                               coin_median_time_pasts ? coin_median_time_pasts->data() : nullptr,
+                               coin_median_time_pasts ? coin_median_time_pasts->size() : 0,
+                               state.get()) == 1;
+}
 
 class ChainMan : UniqueHandle<btck_ChainstateManager, btck_chainstate_manager_destroy>
 {

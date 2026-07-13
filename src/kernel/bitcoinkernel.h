@@ -1416,6 +1416,89 @@ BITCOINKERNEL_API int btck_block_check(
     btck_BlockValidationState* validation_state) BITCOINKERNEL_ARG_NONNULL(1, 2, 4);
 
 /**
+ * @brief Perform full consensus validation of a btck_Block without chainstate.
+ *
+ * Validates a block against (nearly) all consensus rules without requiring a
+ * chainstate manager or UTXO set. All chain context that would normally be
+ * looked up from state has to be supplied by the caller instead:
+ *
+ * - The coins spent by the block's transactions (@p spent_coins), as a flat
+ *   array with one coin per input of every non-coinbase transaction, in
+ *   transaction and then input order. Coins can be created with
+ *   btck_coin_create, or sourced from btck_block_spent_outputs_read and
+ *   flattened. Coins created by earlier transactions of the block itself must
+ *   NOT be included; they are tracked internally.
+ * - The @p height the block is validated at.
+ * - The median-time-past of the previous block (@p prev_median_time_past),
+ *   used for the BIP113 lock time cutoff, the timestamp lower bound, and for
+ *   evaluating BIP68 time-based relative lock times.
+ * - Optionally, for each spent coin the median-time-past of the block
+ *   *preceding* the coin's confirmation block (@p coin_median_time_pasts, in
+ *   the same order as @p spent_coins). This is only required for evaluating
+ *   BIP68 *time-based* relative lock times of coins created in prior blocks.
+ *   It may be null, in which case a block containing such a lock time fails
+ *   validation (conservative rejection).
+ *
+ * The following checks are performed:
+ * - All context-free checks of btck_block_check with proof-of-work and merkle
+ *   root validation enabled.
+ * - Header checks against the supplied context: timestamp greater than the
+ *   previous median-time-past and minimum version by deployment height.
+ * - Transaction finality (BIP113), coinbase height (BIP34), witness
+ *   commitment and mutation checks, and the block weight limit.
+ * - For every transaction: input availability (including double spend
+ *   detection within the block), coinbase maturity, input amounts and fees,
+ *   total signature operation cost, BIP68 relative lock times, and full
+ *   script verification of every input with the script verification flags
+ *   active at the supplied height.
+ * - The coinbase output value against the accumulated fees plus subsidy.
+ *
+ * The following rules require chain data beyond the supplied context and are
+ * NOT validated: the correctness of the header's nBits against the difficulty
+ * adjustment rules (only that the block hash meets its claimed target),
+ * the BIP30 duplicate-coinbase rule, and that the timestamp is not too far in
+ * the future relative to wall-clock time. The caller is also responsible for
+ * the supplied context (height, median-time-past values and spent outputs)
+ * being correct for the chain the block is validated against.
+ *
+ * @param[in]  block                   Non-null, btck_Block to validate.
+ * @param[in]  consensus_params        Non-null, btck_ConsensusParams for validation.
+ * @param[in]  spent_coins             Non-null, points to an array of coins
+ *                                     spent by the block's transactions, one
+ *                                     per input of every non-coinbase
+ *                                     transaction, in transaction and then
+ *                                     input order.
+ * @param[in]  spent_coins_len         Length of the spent_coins array. Must
+ *                                     equal the total number of inputs of the
+ *                                     block's non-coinbase transactions.
+ * @param[in]  height                  Height the block is validated at, must be
+ *                                     non-negative.
+ * @param[in]  prev_median_time_past   Median-time-past of the previous block.
+ * @param[in]  coin_median_time_pasts  Nullable. If non-null, points to an array
+ *                                     with one entry per coin in spent_coins,
+ *                                     holding the median-time-past of the block
+ *                                     preceding the coin's confirmation block.
+ * @param[in]  coin_median_time_pasts_len Length of the coin_median_time_pasts
+ *                                     array. Must equal spent_coins_len if the
+ *                                     array is non-null.
+ * @param[out] validation_state        Non-null, previously created with
+ *                                     btck_block_validation_state_create.
+ *                                     Overwritten in-place with the validation
+ *                                     result.
+ * @return                             1 if the btck_Block is valid, 0 otherwise.
+ */
+BITCOINKERNEL_API int btck_block_validate(
+    const btck_Block* block,
+    const btck_ConsensusParams* consensus_params,
+    const btck_Coin** spent_coins,
+    size_t spent_coins_len,
+    int32_t height,
+    int64_t prev_median_time_past,
+    const int64_t* coin_median_time_pasts,
+    size_t coin_median_time_pasts_len,
+    btck_BlockValidationState* validation_state) BITCOINKERNEL_ARG_NONNULL(1, 2, 3, 9);
+
+/**
  * @brief Count the number of transactions contained in a block.
  *
  * @param[in] block Non-null.
@@ -1782,6 +1865,23 @@ BITCOINKERNEL_API void btck_txid_destroy(btck_Txid* txid);
  * Functions for working with coins.
  */
 ///@{
+
+/**
+ * @brief Create a new coin from a transaction output and its metadata. This
+ * can be used to supply externally sourced coin data, e.g. to
+ * btck_block_validate.
+ *
+ * @param[in] output              Non-null, the unspent transaction output.
+ * @param[in] confirmation_height Height of the block the transaction creating
+ *                                this output was included in.
+ * @param[in] is_coinbase         Non-zero if the transaction creating this
+ *                                output was a coinbase transaction.
+ * @return                        The coin.
+ */
+BITCOINKERNEL_API btck_Coin* BITCOINKERNEL_WARN_UNUSED_RESULT btck_coin_create(
+    const btck_TransactionOutput* output,
+    uint32_t confirmation_height,
+    int is_coinbase) BITCOINKERNEL_ARG_NONNULL(1);
 
 /**
  * @brief Copy a coin.

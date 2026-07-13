@@ -1143,6 +1143,59 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     auto read_block_2 = chainman->ReadBlock(tip_2).value();
     check_equal(read_block_2.ToBytes(), hex_string_to_byte_vec(REGTEST_BLOCK_DATA[REGTEST_BLOCK_DATA.size() - 2]));
 
+    // Fully validate every block without chainstate, supplying all required
+    // context (spent outputs, height, and median-time-past values) manually.
+    {
+        ChainParams regtest_params{ChainType::REGTEST};
+        auto consensus_params{regtest_params.GetConsensusParams()};
+
+        // Compute the median-time-past for every height from the header
+        // timestamps.
+        std::vector<int64_t> timestamps;
+        std::vector<int64_t> mtps;
+        for (const auto entry : chain.Entries()) {
+            timestamps.push_back(entry.GetHeader().Timestamp());
+            const size_t begin{timestamps.size() > 11 ? timestamps.size() - 11 : 0};
+            std::vector<int64_t> window(timestamps.begin() + begin, timestamps.end());
+            std::sort(window.begin(), window.end());
+            mtps.push_back(window[window.size() / 2]);
+        }
+
+        for (int32_t height{1}; height <= chain.Height(); ++height) {
+            auto entry{chain.GetByHeight(height)};
+            Block chain_block{chainman->ReadBlock(entry).value()};
+            BlockSpentOutputs spent_outputs{chainman->ReadBlockSpentOutputs(entry)};
+
+            // Flatten the spent outputs into one coin per input in
+            // transaction and then input order, re-creating each coin from
+            // its parts to exercise coin construction. Also collect one
+            // median-time-past entry per spent coin, of the block preceding
+            // the coin's confirmation block.
+            std::vector<Coin> spent_coins;
+            std::vector<int64_t> coin_mtps;
+            for (const auto tx_spent_outputs : spent_outputs.TxsSpentOutputs()) {
+                for (const auto coin : tx_spent_outputs.Coins()) {
+                    const auto coin_height{static_cast<int32_t>(coin.GetConfirmationHeight())};
+                    spent_coins.emplace_back(coin.GetOutput(), coin.GetConfirmationHeight(), coin.IsCoinbase());
+                    coin_mtps.push_back(mtps[std::max(coin_height - 1, 0)]);
+                }
+            }
+
+            BlockValidationState state;
+            BOOST_CHECK(chain_block.Validate(consensus_params, spent_coins, height,
+                                             /*prev_median_time_past=*/mtps[height - 1],
+                                             &coin_mtps, state));
+            BOOST_CHECK(state.GetValidationMode() == ValidationMode::VALID);
+
+            // Validating at the wrong height must fail (BIP34 coinbase height).
+            BOOST_CHECK(!chain_block.Validate(consensus_params, spent_coins, height + 1,
+                                              /*prev_median_time_past=*/mtps[height - 1],
+                                              &coin_mtps, state));
+            BOOST_CHECK(state.GetValidationMode() == ValidationMode::INVALID);
+            BOOST_CHECK(state.GetBlockValidationResult() == BlockValidationResult::CONSENSUS);
+        }
+    }
+
     Txid txid = read_block.Transactions()[0].Txid();
     Txid txid_2 = read_block_2.Transactions()[0].Txid();
     BOOST_CHECK(txid != txid_2);

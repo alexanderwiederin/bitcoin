@@ -8,7 +8,10 @@
 
 #include <chain.h>
 #include <coins.h>
+#include <consensus/amount.h>
+#include <consensus/consensus.h>
 #include <consensus/tx_check.h>
+#include <consensus/tx_verify.h>
 #include <consensus/validation.h>
 #include <dbwrapper.h>
 #include <kernel/caches.h>
@@ -24,6 +27,7 @@
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
 #include <script/script.h>
+#include <script/script_error.h>
 #include <script/verify_flags.h>
 #include <serialize.h>
 #include <streams.h>
@@ -46,6 +50,7 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -1159,6 +1164,230 @@ int btck_block_check(const btck_Block* block, const btck_ConsensusParams* consen
     return result ? 1 : 0;
 }
 
+int btck_block_validate(const btck_Block* block_, const btck_ConsensusParams* consensus_params,
+                        const btck_Coin** spent_coins, size_t spent_coins_len,
+                        int32_t height, int64_t prev_median_time_past,
+                        const int64_t* coin_median_time_pasts, size_t coin_median_time_pasts_len,
+                        btck_BlockValidationState* validation_state)
+{
+    const CBlock& block{*btck_Block::get(block_)};
+    const Consensus::Params& params{btck_ConsensusParams::get(consensus_params)};
+    auto& state = btck_BlockValidationState::get(validation_state);
+    state = BlockValidationState{};
+
+    assert(height >= 0);
+
+    // Context-free checks: PoW, merkle root, size limits, coinbase structure,
+    // transaction checks (including duplicate inputs), and legacy sigops.
+    if (!CheckBlock(block, state, params, /*fCheckPOW=*/true, /*fCheckMerkleRoot=*/true)) {
+        return 0;
+    }
+
+    // The spent coins must mirror the block's shape: one coin per input of
+    // every non-coinbase transaction.
+    size_t total_coins{0};
+    for (size_t i{1}; i < block.vtx.size(); ++i) {
+        total_coins += block.vtx[i]->vin.size();
+    }
+    assert(spent_coins_len == total_coins);
+    if (coin_median_time_pasts != nullptr) {
+        assert(coin_median_time_pasts_len == total_coins);
+    }
+
+    const auto deployment_active{[&](Consensus::BuriedDeployment dep) {
+        return height >= params.DeploymentHeight(dep);
+    }};
+
+    // Contextual header checks against the supplied context. The difficulty
+    // (nBits) and wall-clock future timestamp rules cannot be checked here.
+    if (height > 0 && block.GetBlockTime() <= prev_median_time_past) {
+        state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "time-too-old", "block's timestamp is too early");
+        return 0;
+    }
+    if ((block.nVersion < 2 && deployment_active(Consensus::DEPLOYMENT_HEIGHTINCB)) ||
+        (block.nVersion < 3 && deployment_active(Consensus::DEPLOYMENT_DERSIG)) ||
+        (block.nVersion < 4 && deployment_active(Consensus::DEPLOYMENT_CLTV))) {
+        state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-version", "rejected block with outdated version");
+        return 0;
+    }
+
+    // Contextual block checks, mirroring ContextualCheckBlock.
+    const bool csv_active{deployment_active(Consensus::DEPLOYMENT_CSV)};
+    const int64_t lock_time_cutoff{csv_active ? prev_median_time_past : block.GetBlockTime()};
+    for (const auto& tx : block.vtx) {
+        if (!IsFinalTx(*tx, height, lock_time_cutoff)) {
+            state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-txns-nonfinal", "non-final transaction");
+            return 0;
+        }
+    }
+
+    // Enforce rule that the coinbase starts with serialized block height (BIP34).
+    if (deployment_active(Consensus::DEPLOYMENT_HEIGHTINCB)) {
+        const CScript expect{CScript() << height};
+        if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
+            !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin())) {
+            state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-height", "block height mismatch in coinbase");
+            return 0;
+        }
+    }
+
+    // Witness commitment validation and mutation checks.
+    if (IsBlockMutated(block, /*check_witness_root=*/deployment_active(Consensus::DEPLOYMENT_SEGWIT))) {
+        state.Invalid(BlockValidationResult::BLOCK_MUTATED, "block-mutated", "witness commitment validation failed or block mutated");
+        return 0;
+    }
+
+    if (GetBlockWeight(block) > MAX_BLOCK_WEIGHT) {
+        state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-weight", "weight limit failed");
+        return 0;
+    }
+
+    // Determine the script verification flags active at this height,
+    // mirroring GetBlockScriptFlags.
+    script_verify_flags flags{SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_TAPROOT};
+    if (const auto it{params.script_flag_exceptions.find(block.GetHash())}; it != params.script_flag_exceptions.end()) {
+        flags = it->second;
+    }
+    if (deployment_active(Consensus::DEPLOYMENT_DERSIG)) flags |= SCRIPT_VERIFY_DERSIG;
+    if (deployment_active(Consensus::DEPLOYMENT_CLTV)) flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
+    if (csv_active) flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    if (deployment_active(Consensus::DEPLOYMENT_SEGWIT)) flags |= SCRIPT_VERIFY_NULLDUMMY;
+
+    // Connect the block's transactions against a coins view populated from
+    // the supplied spent outputs, mirroring ConnectBlock.
+    try {
+        CCoinsViewCache view{&CoinsViewEmpty::Get()};
+        std::set<COutPoint> spent_outpoints;
+        CAmount fees{0};
+        int64_t sigops_cost{0};
+        size_t coin_offset{0}; // flattened index into the supplied coins
+
+        for (size_t tx_index{0}; tx_index < block.vtx.size(); ++tx_index) {
+            const CTransaction& tx{*block.vtx[tx_index]};
+
+            if (!tx.IsCoinBase()) {
+                // Make the supplied coins available, unless the outpoint was
+                // already spent by an earlier transaction in this block
+                // (double spend, caught by CheckTxInputs below) or created by
+                // an earlier transaction in this block (already in the view).
+                for (size_t i{0}; i < tx.vin.size(); ++i) {
+                    const COutPoint& prevout{tx.vin[i].prevout};
+                    if (!spent_outpoints.contains(prevout) && !view.HaveCoin(prevout)) {
+                        view.AddCoin(prevout, Coin{btck_Coin::get(spent_coins[coin_offset + i])}, /*possible_overwrite=*/false);
+                    }
+                }
+
+                // Input availability, coinbase maturity, amounts, and fees.
+                CAmount txfee{0};
+                TxValidationState tx_state;
+                if (!Consensus::CheckTxInputs(tx, tx_state, view, height, txfee)) {
+                    state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, tx_state.GetRejectReason(),
+                                  tx_state.GetDebugMessage() + " in transaction " + tx.GetHash().ToString());
+                    return 0;
+                }
+                fees += txfee;
+                if (!MoneyRange(fees)) {
+                    state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-txns-accumulated-fee-outofrange",
+                                  "accumulated fee in the block out of range");
+                    return 0;
+                }
+
+                // BIP68 relative lock times, mirroring CalculateSequenceLocks
+                // and EvaluateSequenceLocks with caller-supplied
+                // median-time-past values.
+                if (csv_active && tx.version >= 2) {
+                    int min_height{-1};
+                    int64_t min_time{-1};
+                    for (size_t i{0}; i < tx.vin.size(); ++i) {
+                        const CTxIn& txin{tx.vin[i]};
+                        if (txin.nSequence & CTxIn::SEQUENCE_LOCKTIME_DISABLE_FLAG) continue;
+                        const int32_t coin_height(view.AccessCoin(txin.prevout).nHeight);
+                        if (txin.nSequence & CTxIn::SEQUENCE_LOCKTIME_TYPE_FLAG) {
+                            int64_t coin_time;
+                            if (coin_height >= height) {
+                                // Coin created within this block: time-based
+                                // relative lock times are measured from the
+                                // median-time-past of the previous block.
+                                coin_time = prev_median_time_past;
+                            } else if (coin_median_time_pasts != nullptr) {
+                                coin_time = coin_median_time_pasts[coin_offset + i];
+                            } else {
+                                state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-txns-nonfinal",
+                                              "median-time-past data for time-based relative lock time not provided");
+                                return 0;
+                            }
+                            min_time = std::max(min_time, coin_time + (int64_t)((txin.nSequence & CTxIn::SEQUENCE_LOCKTIME_MASK) << CTxIn::SEQUENCE_LOCKTIME_GRANULARITY) - 1);
+                        } else {
+                            min_height = std::max(min_height, (int)coin_height + (int)(txin.nSequence & CTxIn::SEQUENCE_LOCKTIME_MASK) - 1);
+                        }
+                    }
+                    if (min_height >= height || min_time >= prev_median_time_past) {
+                        state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-txns-nonfinal",
+                                      "relative lock time requirement not satisfied in transaction " + tx.GetHash().ToString());
+                        return 0;
+                    }
+                }
+            }
+
+            // Total sigop cost (legacy, P2SH, and witness).
+            sigops_cost += GetTransactionSigOpCost(tx, view, flags);
+            if (sigops_cost > MAX_BLOCK_SIGOPS_COST) {
+                state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-sigops", "too many sigops");
+                return 0;
+            }
+
+            if (!tx.IsCoinBase()) {
+                // Full script verification of every input.
+                std::vector<CTxOut> spent_outs;
+                spent_outs.reserve(tx.vin.size());
+                for (const auto& txin : tx.vin) {
+                    spent_outs.push_back(view.AccessCoin(txin.prevout).out);
+                }
+                PrecomputedTransactionData txdata;
+                txdata.Init(tx, std::move(spent_outs));
+                for (size_t i{0}; i < tx.vin.size(); ++i) {
+                    ScriptError script_error{SCRIPT_ERR_OK};
+                    if (!VerifyScript(tx.vin[i].scriptSig, txdata.m_spent_outputs[i].scriptPubKey,
+                                      &tx.vin[i].scriptWitness, flags,
+                                      TransactionSignatureChecker(&tx, i, txdata.m_spent_outputs[i].nValue, txdata, MissingDataBehavior::FAIL),
+                                      &script_error)) {
+                        state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "mandatory-script-verify-flag-failed",
+                                      ScriptErrorString(script_error) + " in transaction " + tx.GetHash().ToString());
+                        return 0;
+                    }
+                }
+
+                // Spend the inputs.
+                for (const auto& txin : tx.vin) {
+                    view.SpendCoin(txin.prevout);
+                    spent_outpoints.insert(txin.prevout);
+                }
+                coin_offset += tx.vin.size();
+            }
+
+            // Make this transaction's outputs available to later transactions.
+            AddCoins(view, tx, height);
+        }
+
+        // Coinbase output value must not exceed the fees plus subsidy.
+        const CAmount subsidy{GetBlockSubsidy(height, params)};
+        if (block.vtx[0]->GetValueOut() > fees + subsidy) {
+            state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount",
+                          "coinbase pays too much");
+            return 0;
+        }
+    } catch (const std::logic_error&) {
+        // A transaction attempted to overwrite an unspent coin, which can
+        // only happen if a transaction spends an output created by a later
+        // transaction in the block.
+        state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "tx-ordering",
+                      "transaction spends output of a later transaction in the block");
+        return 0;
+    }
+
+    return 1;
+}
+
 size_t btck_block_count_transactions(const btck_Block* block)
 {
     return btck_Block::get(block)->vtx.size();
@@ -1308,6 +1537,11 @@ const btck_Coin* btck_transaction_spent_outputs_get_coin_at(const btck_Transacti
     assert(coin_index < btck_TransactionSpentOutputs::get(transaction_spent_outputs).vprevout.size());
     const Coin* coin{&btck_TransactionSpentOutputs::get(transaction_spent_outputs).vprevout.at(coin_index)};
     return btck_Coin::ref(coin);
+}
+
+btck_Coin* btck_coin_create(const btck_TransactionOutput* output, uint32_t confirmation_height, int is_coinbase)
+{
+    return btck_Coin::create(btck_TransactionOutput::get(output), confirmation_height, is_coinbase != 0);
 }
 
 btck_Coin* btck_coin_copy(const btck_Coin* coin)
