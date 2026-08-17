@@ -57,6 +57,12 @@
 #include <utility>
 #include <vector>
 
+static_assert(static_cast<uint8_t>(SigVersion::BASE) == btck_SigVersion_BASE);
+static_assert(static_cast<uint8_t>(SigVersion::WITNESS_V0) == btck_SigVersion_WITNESS_V0);
+static_assert(static_cast<uint8_t>(SigVersion::TAPROOT) == btck_SigVersion_TAPROOT);
+static_assert(static_cast<uint8_t>(SigVersion::TAPSCRIPT) == btck_SigVersion_TAPSCRIPT);
+static_assert(static_cast<uint8_t>(SigVersion::TAPSCRIPT_V2) == btck_SigVersion_TAPSCRIPT_V2);
+
 namespace Consensus {
 struct Params;
 } // namespace Consensus

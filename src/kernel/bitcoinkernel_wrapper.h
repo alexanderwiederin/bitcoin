@@ -132,6 +132,7 @@ enum class SigVersion : btck_SigVersion {
     WITNESS_V0 = btck_SigVersion_WITNESS_V0,
     TAPROOT = btck_SigVersion_TAPROOT,
     TAPSCRIPT = btck_SigVersion_TAPSCRIPT,
+    TAPSCRIPT_V2 = btck_SigVersion_TAPSCRIPT_V2,
 };
 
 template <typename T>

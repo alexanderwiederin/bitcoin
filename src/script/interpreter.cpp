@@ -1290,6 +1290,11 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
     uint32_t opcode_pos = 0;
     execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
     execdata.m_codeseparator_pos_init = true;
+    SCRIPT_TRACE_SCOPE_V2(stack, script, opcode_pos, altstack,
+            [&vfExec]() { return vfExec.all_true(); },
+            SigVersion::TAPSCRIPT_V2,
+            execdata.m_tapleaf_hash_init ? execdata.m_tapleaf_hash.data() : nullptr,
+            execdata.m_codeseparator_pos, serror);
 
     try
     {
@@ -1307,6 +1312,9 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
             //
             if (!script.GetOp(pc, opcode, vchPushValue))
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+
+            SCRIPT_TRACE_STEP(fExec, opcode);
+
             if (vchPushValue.size() > MAX_TAPSCRIPT_V2_STACK_ELEMENT_SIZE)
                 return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
 

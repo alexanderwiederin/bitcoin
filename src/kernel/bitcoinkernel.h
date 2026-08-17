@@ -532,13 +532,15 @@ typedef uint32_t btck_ScriptVerificationFlags;
 #define btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY ((btck_ScriptVerificationFlags)(1U << 10)) //!< enable CHECKSEQUENCEVERIFY (BIP112)
 #define btck_ScriptVerificationFlags_WITNESS ((btck_ScriptVerificationFlags)(1U << 11))             //!< enable WITNESS (BIP141)
 #define btck_ScriptVerificationFlags_TAPROOT ((btck_ScriptVerificationFlags)(1U << 17))             //!< enable TAPROOT (BIPs 341 & 342)
+#define btck_ScriptVerificationFlags_SCRIPT_RESTORATION ((btck_ScriptVerificationFlags)(1U << 21))
 #define btck_ScriptVerificationFlags_ALL ((btck_ScriptVerificationFlags)(btck_ScriptVerificationFlags_P2SH |                \
                                                                          btck_ScriptVerificationFlags_DERSIG |              \
                                                                          btck_ScriptVerificationFlags_NULLDUMMY |           \
                                                                          btck_ScriptVerificationFlags_CHECKLOCKTIMEVERIFY | \
                                                                          btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY | \
                                                                          btck_ScriptVerificationFlags_WITNESS |             \
-                                                                         btck_ScriptVerificationFlags_TAPROOT))
+                                                                         btck_ScriptVerificationFlags_TAPROOT |             \
+                                                                         btck_ScriptVerificationFlags_SCRIPT_RESTORATION))
 
 typedef uint8_t btck_ChainType;
 #define btck_ChainType_MAINNET ((btck_ChainType)(0))
@@ -2066,6 +2068,7 @@ typedef uint8_t btck_SigVersion;
 #define btck_SigVersion_WITNESS_V0 ((btck_SigVersion)(1))
 #define btck_SigVersion_TAPROOT    ((btck_SigVersion)(2))
 #define btck_SigVersion_TAPSCRIPT  ((btck_SigVersion)(3))
+#define btck_SigVersion_TAPSCRIPT_V2 ((btck_SigVersion)(4))
 
 /**
  * Snapshot of script execution state passed to the trace callback.
@@ -2085,7 +2088,7 @@ typedef struct {
     uint8_t opcode;                             //!< The current opcode under evaluation. Only meaningful in step frames.
     int op_count;                               //!< Counter towards the ops per script limit.
     btck_SigVersion sig_version;                //!< Signature version.
-    const unsigned char* tapleaf_hash;          //!< Either null if not evaluating a tapleaf, or points to exactly 32 bytes (and sig_version is TAPSCRIPT).
+    const unsigned char* tapleaf_hash;          //!< Either null if not evaluating a tapleaf, or points to exactly 32 bytes (and sig_version is TAPSCRIPT or TAPSCRIPT_V2).
     uint32_t codeseparator_pos;                 //!< Opcode position of the last evaluated OP_CODESEPARATOR. 0xFFFFFFFF if none.
     int32_t script_error;                       //!< Script error code. Only meaningful in end frames.
 } btck_ScriptTraceFrame;
