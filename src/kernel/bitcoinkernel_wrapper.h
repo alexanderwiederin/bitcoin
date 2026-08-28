@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -1428,6 +1429,16 @@ public:
 
 
 struct ScriptTraceFrame {
+    /** Varops charged by this evaluation (BIP 440). */
+    struct Varops {
+        /** Carged since the previous frame. Step frames are emitted before the
+         * opcode is dispatched, so this is the cost of the opcode named by the
+         * previous frame; the last opcode's cost arrives on the end frame. */
+        uint64_t m_spent;
+        /** Charged by this evaluation up to and including this frame. */
+        uint64_t m_total;
+    };
+
     ScriptTraceFrameKind m_kind;
     std::vector<std::vector<unsigned char>> m_stack;
     std::vector<std::vector<unsigned char>> m_altstack;
@@ -1440,6 +1451,8 @@ struct ScriptTraceFrame {
     SigVersion m_sig_version;
     uint32_t m_codeseparator_pos;
     int32_t m_script_error;
+    /** std::nullopt outside tapscript v2, the only varops-accounted sigversion. */
+    std::optional<Varops> m_varops;
 
     explicit ScriptTraceFrame(const btck_ScriptTraceFrame& frame)
         : m_kind{static_cast<ScriptTraceFrameKind>(frame.kind)},
@@ -1467,6 +1480,10 @@ struct ScriptTraceFrame {
         if (frame.tapleaf_hash) {
             m_tapleaf_hash.emplace();
             std::copy_n(frame.tapleaf_hash, 32, m_tapleaf_hash->begin());
+        }
+
+        if (frame.varops_accounted) {
+            m_varops.emplace(Varops{.m_spent = frame.varops_spent, .m_total = frame.varops_total});
         }
     }
 };

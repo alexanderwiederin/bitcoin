@@ -2091,6 +2091,9 @@ typedef struct {
     const unsigned char* tapleaf_hash;          //!< Either null if not evaluating a tapleaf, or points to exactly 32 bytes (and sig_version is TAPSCRIPT or TAPSCRIPT_V2).
     uint32_t codeseparator_pos;                 //!< Opcode position of the last evaluated OP_CODESEPARATOR. 0xFFFFFFFF if none.
     int32_t script_error;                       //!< Script error code. Only meaningful in end frames.
+    int varops_accounted;                       //!< Non-zero if varops_spent and varops_total are meaningful. Only tapscript v2 is varops-accounted.
+    uint64_t varops_spent;                      //!< Varops charged since the previous frame of this evaluation. Step frames are emitted before the opcode is dispatched, so this is the cost of the opcode named by the previous frame; the last opcode's cost arrives on the end frame.
+    uint64_t varops_total;                      //!< Varops charged by this evaluation up to and including this frame.
 } btck_ScriptTraceFrame;
 
 /**
@@ -2112,7 +2115,9 @@ typedef void (*btck_ScriptTraceCallback)(
  * Only one callback can be registered at a time. Registering a new callback
  * replaces the previous one. The callback fires on entry of the script
  * evaluator, on exit, and once per instruction - after the opcode is decoded
- * and before it is dispatched/executed.
+ * and before it is dispatched/executed. Because step frames are emitted before
+ * dispatch, the varops_spent of a frame is the cost of the *previous* frame's
+ * opcode, and the cost of the final opcode is reported on the end frame.
  *
  * @param[in] callback                   The callback function to register.
  * @param[in] user_data                  User-defined opaque pointer passed to the callback.

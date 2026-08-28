@@ -1593,6 +1593,9 @@ int btck_script_trace_register_callback(btck_ScriptTraceCallback callback, void*
         btck_frame.tapleaf_hash = frame.tapleaf_hash;
         btck_frame.codeseparator_pos = frame.codeseparator_pos;
         btck_frame.script_error = frame.script_error;
+        btck_frame.varops_accounted = frame.varops.has_value() ? 1 : 0;
+        btck_frame.varops_spent = frame.varops ? frame.varops->spent : 0;
+        btck_frame.varops_total = frame.varops ? frame.varops->total : 0;
 
         callback(owned_user_data.get(), &btck_frame);
     };

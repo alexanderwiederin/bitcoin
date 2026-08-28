@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <utility>
 
 namespace varops {
 
@@ -51,6 +52,45 @@ public:
     {
         if (!m_remaining) return std::nullopt;
         return m_remaining->load(std::memory_order_relaxed);
+    }
+};
+
+/** Per-evaluation view of a (possibly shared) transaction-wide Budget.
+ *
+ * A Budget is shared by every script check of a transaction and may be charged
+ * concurrently from the script check threads, so Budget::Remaining() can not be
+ * attributed to any single script evaluation. Meter records what one evaluation
+ * charged, which is deterministic and independent of the other inputs.
+ *
+ * Only observability depends on the counters; consensus behaviour is entirely
+ * decided by the wrapped Budget.
+ */
+class Meter final
+{
+private:
+    Budget& m_budget;
+    uint64_t m_total{0};
+    uint64_t m_since_last_frame{0};
+
+public:
+    explicit Meter(Budget& budget) : m_budget{budget} {}
+
+    /** Return true if cost was charged; false if the bounded budget was exhausted. */
+    [[nodiscard]] bool Spend(uint64_t cost)
+    {
+        if (!m_budget.Spend(cost)) return false;
+        m_total += cost;
+        m_since_last_frame += cost;
+        return true;
+    }
+
+    /** Varops charged by this evaluation so far. */
+    uint64_t Total() const { return m_total; }
+
+    /** Varops charged since the last TakeSinceLastFrame(). */
+    uint64_t TakeSinceLastFrame()
+    {
+        return std::exchange(m_since_last_frame, 0);
     }
 };
 

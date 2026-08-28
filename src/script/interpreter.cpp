@@ -1290,11 +1290,15 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
     uint32_t opcode_pos = 0;
     execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
     execdata.m_codeseparator_pos_init = true;
+    // Records what this evaluation charges. Consensus behaviour is decided by
+    // varops_budget alone; the meter only adds per-evaluation accounting that
+    // the tracer can attribute to a single script.
+    varops::Meter varops_meter{varops_budget};
     SCRIPT_TRACE_SCOPE_V2(stack, script, opcode_pos, altstack,
             [&vfExec]() { return vfExec.all_true(); },
             SigVersion::TAPSCRIPT_V2,
             execdata.m_tapleaf_hash_init ? execdata.m_tapleaf_hash.data() : nullptr,
-            execdata.m_codeseparator_pos, serror);
+            execdata.m_codeseparator_pos, serror, varops_meter);
 
     try
     {
@@ -1942,7 +1946,7 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
                     const valtype& vchPubKey = stacktop(-1);
 
                     // Match BIP342 by charging signature validation only for non-empty signatures.
-                    if (!vchSig.empty() && !varops_budget.Spend(varops::COST_PER_SIGOP)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
+                    if (!vchSig.empty() && !varops_meter.Spend(varops::COST_PER_SIGOP)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
 
                     bool fSuccess = true;
                     if (!EvalChecksigTapscript(vchSig, vchPubKey, execdata, flags, checker, SigVersion::TAPSCRIPT_V2, serror, fSuccess)) return false;
@@ -1973,7 +1977,7 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
                     const uint64_t checksigadd_cost{
                         (sig.empty() ? 0 : varops::COST_PER_SIGOP) +
                         varops::ChecksigAddIncrementCost(stack.at(stack.size() - 2).size())};
-                    if (!varops_budget.Spend(checksigadd_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
+                    if (!varops_meter.Spend(checksigadd_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
 
                     bool success = true;
                     if (!EvalChecksigTapscript(sig, pubkey, execdata, flags, checker, SigVersion::TAPSCRIPT_V2, serror, success)) return false;
@@ -2136,7 +2140,7 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
                         // BIP 441 cost: (length(A) + length(B)) * 3
                         // + W(length(A)) / 8 * W(length(B)) * 27.
                         const uint64_t op_cost{varops::MulCost(v64a.size(), v64b.size())};
-                        if (!varops_budget.Spend(op_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
+                        if (!varops_meter.Spend(op_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
                         v64a = Val64::OpMul(v64a, v64b);
                         break;
                     }
@@ -2146,7 +2150,7 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
                         // BIP 441 cost: W(length(A)) * 18 + W(length(B)) * 4
                         // + W(length(A))^2 * 2 / 3.
                         const uint64_t op_cost{varops::DivCost(v64a.size(), v64b.size())};
-                        if (!varops_budget.Spend(op_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
+                        if (!varops_meter.Spend(op_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
                         if (!Val64::OpDiv(v64a, v64b))
                             return set_error(serror, SCRIPT_ERR_DIVIDE_BY_ZERO);
                         break;
@@ -2157,7 +2161,7 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
                         // BIP 441 cost: W(length(A)) * 18 + W(length(B)) * 4
                         // + W(length(A))^2 * 2 / 3.
                         const uint64_t op_cost{varops::ModCost(v64a.size(), v64b.size())};
-                        if (!varops_budget.Spend(op_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
+                        if (!varops_meter.Spend(op_cost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
                         if (!Val64::OpMod(v64a, v64b))
                             return set_error(serror, SCRIPT_ERR_DIVIDE_BY_ZERO);
                         break;
@@ -2204,7 +2208,7 @@ bool EvalTapscriptV2(ValtypeStack& stack, const CScript& script, script_verify_f
                 return set_error(serror, SCRIPT_ERR_STACK_ELEMENT_SIZE);
             }
 
-            if (!varops_budget.Spend(varcost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
+            if (!varops_meter.Spend(varcost)) return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
         }
     }
     catch (const scriptnum_error&)
