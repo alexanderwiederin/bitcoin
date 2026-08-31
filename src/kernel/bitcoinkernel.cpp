@@ -259,6 +259,8 @@ btck_SigVersion cast_btck_sig_version(SigVersion version)
         return btck_SigVersion_TAPROOT;
     case SigVersion::WITNESS_V0:
         return btck_SigVersion_WITNESS_V0;
+    case SigVersion::TAPSCRIPT_V2:
+        return btck_SigVersion_TAPSCRIPT_V2;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
