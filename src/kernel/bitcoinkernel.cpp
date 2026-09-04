@@ -1649,6 +1649,11 @@ int btck_script_trace_frame_get_op_count(const btck_ScriptTraceFrame* frame)
     return btck_ScriptTraceFrame::get(frame).op_count;
 }
 
+uint64_t btck_script_trace_frame_get_varops(const btck_ScriptTraceFrame* frame)
+{
+    return btck_ScriptTraceFrame::get(frame).varops;
+}
+
 btck_SigVersion btck_script_trace_frame_get_sig_version(const btck_ScriptTraceFrame* frame)
 {
     return cast_btck_sig_version(static_cast<SigVersion>(btck_ScriptTraceFrame::get(frame).sig_version));

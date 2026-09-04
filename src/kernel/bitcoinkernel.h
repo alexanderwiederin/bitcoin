@@ -2130,6 +2130,11 @@ BITCOINKERNEL_API uint8_t btck_script_trace_frame_get_opcode(
 BITCOINKERNEL_API int btck_script_trace_frame_get_op_count(
     const btck_ScriptTraceFrame* frame) BITCOINKERNEL_ARG_NONNULL(1);
 
+/// Cumulative varops charged by this evaluation, not including the current
+/// opcode. Always 0 for sigversions that are not varops-metered.
+BITCOINKERNEL_API uint64_t btck_script_trace_frame_get_varops(
+    const btck_ScriptTraceFrame* frame) BITCOINKERNEL_ARG_NONNULL(1);
+
 /// The signature version.
 BITCOINKERNEL_API btck_SigVersion btck_script_trace_frame_get_sig_version(
     const btck_ScriptTraceFrame* frame) BITCOINKERNEL_ARG_NONNULL(1);

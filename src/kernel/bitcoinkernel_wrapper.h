@@ -1468,6 +1468,7 @@ public:
     bool Exec() const { return btck_script_trace_frame_get_exec(get()) != 0; }
     uint8_t Opcode() const { return btck_script_trace_frame_get_opcode(get()); }
     int OpCount() const { return btck_script_trace_frame_get_op_count(get()); }
+    uint64_t Varops() const { return btck_script_trace_frame_get_varops(get()); }
     SigVersion GetSigVersion() const { return static_cast<SigVersion>(btck_script_trace_frame_get_sig_version(get())); }
     uint32_t CodeseparatorPos() const { return btck_script_trace_frame_get_codeseparator_pos(get()); }
     int32_t GetScriptError() const { return btck_script_trace_frame_get_script_error(get()); }
