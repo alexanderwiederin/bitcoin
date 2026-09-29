@@ -111,6 +111,7 @@ enum class ScriptVerificationFlags : btck_ScriptVerificationFlags {
     CHECKSEQUENCEVERIFY = btck_ScriptVerificationFlags_CHECKSEQUENCEVERIFY,
     WITNESS = btck_ScriptVerificationFlags_WITNESS,
     TAPROOT = btck_ScriptVerificationFlags_TAPROOT,
+    SCRIPT_RESTORATION = btck_ScriptVerificationFlags_SCRIPT_RESTORATION,
     ALL = btck_ScriptVerificationFlags_ALL
 };
 
@@ -132,6 +133,7 @@ enum class SigVersion : btck_SigVersion {
     WITNESS_V0 = btck_SigVersion_WITNESS_V0,
     TAPROOT = btck_SigVersion_TAPROOT,
     TAPSCRIPT = btck_SigVersion_TAPSCRIPT,
+    TAPSCRIPT_V2 = btck_SigVersion_TAPSCRIPT_V2,
 };
 
 template <typename T>
